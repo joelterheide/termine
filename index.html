@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Helferliste</title>
+<meta name="description" content="Kommende Termine und Aufgaben – trag dich ein, wo du helfen kannst.">
+<meta name="theme-color" content="#ffffff">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='2' fill='%232b4c7e'/%3E%3Cpath d='M4 8.5l2.5 2.5L12 5.5' stroke='%23fff' stroke-width='2' fill='none'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<script src="config.js"></script>
+<script src="app.js" defer></script>
+</head>
+<body>
+<div class="seite">
+  <header class="kopf">
+    <h1 id="titel">Helferliste</h1>
+    <p id="untertitel" class="unter"></p>
+  </header>
+  <div id="hinweis"></div>
+  <nav class="reiter" id="reiter" aria-label="Bereiche"></nav>
+  <main id="inhalt"><p class="leer">Lade …</p></main>
+  <footer id="fuss" class="fuss"></footer>
+</div>
+<div id="meldung" class="meldung" role="status" aria-live="polite" hidden></div>
+<noscript><p class="seite">Bitte JavaScript aktivieren, um die Helferliste zu nutzen.</p></noscript>
+</body>
+</html>

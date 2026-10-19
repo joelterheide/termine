@@ -1,0 +1,410 @@
+:root {
+  --text: #1d1d1b;
+  --leise: #66655f;
+  --linie: #dddbd5;
+  --rand: #b3b1aa;
+  --flaeche: #f4f3ef;
+  --hinter: #ffffff;
+  --akzent: #2b4c7e;
+  --auf-akzent: #ffffff;
+  --fehler: #a12d2d;
+  --markiert: #fbf3d5;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --text: #e7e5df;
+    --leise: #a3a19a;
+    --linie: #393834;
+    --rand: #5c5a55;
+    --flaeche: #23221f;
+    --hinter: #181715;
+    --akzent: #a7c0e8;
+    --auf-akzent: #181715;
+    --fehler: #e59a9a;
+    --markiert: #3a3420;
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--hinter);
+  color: var(--text);
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+.seite {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 2rem 1rem 4rem;
+}
+
+a { color: var(--akzent); }
+
+h1 {
+  font-size: 1.75rem;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.unter {
+  margin: .3rem 0 0;
+  color: var(--leise);
+}
+
+.leise { color: var(--leise); }
+.klein { font-size: .875rem; }
+
+/* ---------- Knöpfe und Felder ---------- */
+
+button {
+  font: inherit;
+  font-size: .9375rem;
+  line-height: 1.3;
+  color: var(--text);
+  background: var(--hinter);
+  border: 1px solid var(--rand);
+  border-radius: 3px;
+  padding: .3rem .75rem;
+  cursor: pointer;
+}
+button:hover { border-color: var(--text); }
+button:disabled { opacity: .6; cursor: default; }
+
+button.haupt {
+  background: var(--akzent);
+  border-color: var(--akzent);
+  color: var(--auf-akzent);
+}
+
+button.link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--akzent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-size: inherit;
+}
+
+input, textarea {
+  font: inherit;
+  font-size: 1rem;
+  color: var(--text);
+  background: var(--hinter);
+  border: 1px solid var(--rand);
+  border-radius: 3px;
+  padding: .35rem .5rem;
+  width: 100%;
+}
+input:focus, textarea:focus, button:focus-visible {
+  outline: 2px solid var(--akzent);
+  outline-offset: 1px;
+}
+textarea { resize: vertical; }
+
+/* ---------- Kopf, Reiter ---------- */
+
+.hinweis {
+  margin-top: 1.25rem;
+  padding: .6rem .8rem;
+  background: var(--flaeche);
+  border: 1px solid var(--linie);
+  font-size: .9375rem;
+}
+.hinweis.fehler { border-color: var(--fehler); }
+
+.reiter {
+  display: flex;
+  gap: 1.5rem;
+  margin-top: 1.75rem;
+  border-bottom: 1px solid var(--linie);
+  overflow-x: auto;
+}
+.reiter a {
+  padding: .5rem 0;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  color: var(--leise);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.reiter a:hover { color: var(--text); }
+.reiter a.aktiv {
+  color: var(--text);
+  border-bottom-color: var(--text);
+  font-weight: 600;
+}
+.reiter .anzahl {
+  margin-left: .3rem;
+  font-size: .8125rem;
+  font-weight: 400;
+  color: var(--leise);
+}
+
+.leiste {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .5rem 1rem;
+  padding: .9rem 0 .2rem;
+  font-size: .9375rem;
+}
+
+.leer {
+  color: var(--leise);
+  padding: 1.25rem 0;
+  margin: 0;
+}
+
+/* ---------- Termine ---------- */
+
+.termin, .aufgabe {
+  padding: 1.5rem 0 1.25rem;
+  border-bottom: 1px solid var(--linie);
+}
+.termin.vorbei, .aufgabe.vorbei { color: var(--leise); }
+.markiert { background: var(--markiert); transition: background 1.5s; }
+
+.t-datum {
+  color: var(--leise);
+  font-size: .9375rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.termin h2, .aufgabe h2 {
+  font-size: 1.3rem;
+  line-height: 1.25;
+  margin: .1rem 0 0;
+}
+
+.t-ort { margin-top: .1rem; }
+
+.info {
+  white-space: pre-line;
+  margin: .5rem 0 0;
+  max-width: 38rem;
+}
+
+.schichten { margin-top: .75rem; }
+
+.tag-kopf {
+  margin-top: 1.1rem;
+  font-weight: 600;
+}
+
+.station { margin-top: .75rem; }
+.station h3 {
+  font-size: 1rem;
+  margin: 0 0 .15rem;
+}
+
+.zeile {
+  display: grid;
+  grid-template-columns: 7.75rem 2.75rem 1fr auto;
+  grid-template-areas: "zeit zahl namen aktion";
+  gap: .2rem .75rem;
+  align-items: baseline;
+  padding: .4rem 0;
+  border-top: 1px solid var(--linie);
+}
+.zeile.ohne-zeit {
+  grid-template-columns: 2.75rem 1fr auto;
+  grid-template-areas: "zahl namen aktion";
+}
+.z-zeit { grid-area: zeit; font-variant-numeric: tabular-nums; }
+.z-zahl {
+  grid-area: zahl;
+  color: var(--leise);
+  font-size: .9375rem;
+  font-variant-numeric: tabular-nums;
+}
+.ist-voll .z-zahl { color: var(--text); }
+.z-namen { grid-area: namen; min-width: 0; }
+.z-aktion { grid-area: aktion; text-align: right; white-space: nowrap; }
+.z-info {
+  display: block;
+  color: var(--leise);
+  font-size: .875rem;
+}
+
+.person { white-space: nowrap; }
+.person.ich { font-weight: 600; }
+.notiz { color: var(--leise); font-weight: 400; white-space: normal; }
+
+.weg {
+  border: 0;
+  background: none;
+  color: var(--leise);
+  padding: 0 0 0 .3rem;
+  font-size: 1.05rem;
+  line-height: 1;
+}
+.weg:hover { color: var(--fehler); }
+
+.verw {
+  display: block;
+  margin-top: .15rem;
+  font-size: .8125rem;
+}
+.verw button + button { margin-left: .5rem; }
+
+.t-links {
+  margin-top: .9rem;
+  font-size: .9375rem;
+}
+.trenn { color: var(--leise); }
+
+.vergangen-schalter {
+  margin: 1.25rem 0 0;
+  font-size: .9375rem;
+}
+
+/* ---------- Formulare ---------- */
+
+form.eintragen {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  padding: .6rem;
+  margin: 0 0 .4rem;
+  background: var(--flaeche);
+  border: 1px solid var(--linie);
+}
+form.eintragen input[name="name"] { flex: 1 1 10rem; width: auto; }
+form.eintragen input[name="notiz"] { flex: 2 1 12rem; width: auto; }
+
+.knoepfe {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  align-items: center;
+}
+
+.kasten {
+  margin: .75rem 0;
+  padding: 1rem;
+  background: var(--flaeche);
+  border: 1px solid var(--linie);
+}
+.kasten h3 {
+  font-size: 1rem;
+  margin: 0 0 .75rem;
+}
+.kasten label {
+  display: block;
+  margin-bottom: .75rem;
+  font-size: .9375rem;
+}
+.kasten label input, .kasten label textarea { margin-top: .2rem; }
+.kasten .reihe {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1rem;
+}
+.kasten .reihe label { flex: 1 1 10rem; }
+.kasten .tipp {
+  display: block;
+  margin-top: .2rem;
+  color: var(--leise);
+  font-size: .8125rem;
+}
+
+form.zeile-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem;
+}
+form.zeile-form input { width: auto; flex: 0 1 14rem; }
+
+/* ---------- Meine Einträge ---------- */
+
+.name-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem;
+  padding: 1rem 0 .25rem;
+}
+.name-form input { flex: 0 1 16rem; width: auto; }
+
+.meine {
+  list-style: none;
+  margin: .75rem 0 0;
+  padding: 0;
+}
+.meine li {
+  display: grid;
+  grid-template-columns: 13rem 1fr auto;
+  gap: .2rem .75rem;
+  align-items: baseline;
+  padding: .5rem 0;
+  border-top: 1px solid var(--linie);
+}
+.meine li:last-child { border-bottom: 1px solid var(--linie); }
+.m-wann { font-variant-numeric: tabular-nums; }
+
+/* ---------- Fuß und Meldungen ---------- */
+
+.fuss {
+  margin-top: 3rem;
+  color: var(--leise);
+  font-size: .875rem;
+}
+.fuss form { margin-top: .5rem; }
+
+.meldung {
+  position: fixed;
+  left: 50%;
+  bottom: 1rem;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 2rem);
+  padding: .6rem 1rem;
+  background: var(--text);
+  color: var(--hinter);
+  border-radius: 3px;
+  font-size: .9375rem;
+  z-index: 10;
+}
+.meldung.fehler { background: var(--fehler); color: #fff; }
+
+/* ---------- Handy ---------- */
+
+@media (max-width: 34rem) {
+  .seite { padding-top: 1.25rem; }
+  h1 { font-size: 1.5rem; }
+  .zeile {
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      "zeit zahl aktion"
+      "namen namen namen";
+  }
+  .zeile.ohne-zeit {
+    grid-template-columns: auto 1fr;
+    grid-template-areas:
+      "zahl aktion"
+      "namen namen";
+  }
+  .meine li {
+    grid-template-columns: 1fr auto;
+  }
+  .m-wann { grid-column: 1 / -1; color: var(--leise); font-size: .9375rem; }
+}
+
+/* ---------- Drucken (z. B. als Aushang) ---------- */
+
+@media print {
+  .reiter, .fuss, .leiste, .z-aktion, .weg, .t-links, .verw, .vergangen-schalter,
+  .hinweis, .meldung, form { display: none !important; }
+  .seite { max-width: none; padding: 0; }
+  .termin, .aufgabe { break-inside: avoid; }
+}
