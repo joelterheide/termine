@@ -2,7 +2,7 @@
 window.HELFERLISTE = {
   // Web-App-URL aus Google Apps Script (endet auf /exec).
   // Leer lassen = Demo-Modus (Einträge werden nur im eigenen Browser gespeichert).
-  api: '',
+  api: 'https://script.google.com/macros/s/AKfycbznyoAE1SA-b6SQuzOYNJgo2Vb1nz7w5igFFAMyhp4Ke0BpXXjYn8vNY89yoTIElNJQ/exec',
 
   // Überschrift und Unterzeile der Seite
   titel: 'Helferliste',
