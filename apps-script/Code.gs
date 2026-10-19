@@ -4,13 +4,17 @@
  * Speichert Termine, Schichten, Aufgaben und Eintragungen in diesem Google Sheet.
  * Einrichtung: siehe README.md im GitHub-Repo (Abschnitt „Einrichten“).
  *
- * Kurzfassung:
- *   1. Neues Google Sheet anlegen → Erweiterungen → Apps Script
+ * Kurzfassung (am Computer, nicht am Handy):
+ *   1. https://script.new öffnen (neues Apps-Script-Projekt)
  *   2. Diesen Code komplett einfügen, unten PASSWORT ändern, speichern
- *   3. Funktion „einrichten“ einmal ausführen (legt die Tabellenblätter an)
+ *   3. Funktion „einrichten“ einmal ausführen – legt die Google-Tabelle
+ *      „Helferliste – Daten“ in deinem Drive an (Link steht im Protokoll)
  *   4. Bereitstellen → Neue Bereitstellung → Web-App
  *      Ausführen als: Ich · Zugriff: Jeder
  *   5. Die Web-App-URL in config.js auf GitHub eintragen
+ *
+ * Alternativ geht auch: Google Sheet öffnen → Erweiterungen → Apps Script.
+ * Dann werden die Daten direkt in diesem Sheet gespeichert.
  */
 
 // ===================== EINSTELLUNG =====================
@@ -431,10 +435,34 @@ function plusTage_(d, n) {
 // Google-Sheets-Anbindung (läuft nur im Apps Script)
 // =======================================================
 
-/** Einmal im Editor ausführen: legt die Tabellenblätter an und fragt die Berechtigung ab. */
+/** Einmal im Editor ausführen: legt die Tabelle an und fragt die Berechtigung ab. */
 function einrichten() {
   ladeTabellen_();
-  Logger.log('Fertig. Jetzt „Bereitstellen → Neue Bereitstellung → Web-App“ wählen.');
+  Logger.log('Fertig. Deine Daten-Tabelle: ' + tabellenDatei_().getUrl());
+  Logger.log('Jetzt oben rechts „Bereitstellen → Neue Bereitstellung → Web-App“ wählen.');
+}
+
+/**
+ * Die Google-Tabelle mit den Daten:
+ * - Skript aus einem Sheet heraus geöffnet (Erweiterungen → Apps Script): dieses Sheet
+ * - eigenständiges Skript (script.new): eine eigene Tabelle, die beim ersten Mal angelegt wird
+ */
+let tabellenDateiCache_ = null;
+function tabellenDatei_() {
+  if (tabellenDateiCache_) return tabellenDateiCache_;
+  let ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) {
+    const props = PropertiesService.getScriptProperties();
+    const id = props.getProperty('TABELLE_ID');
+    if (id) {
+      ss = SpreadsheetApp.openById(id);
+    } else {
+      ss = SpreadsheetApp.create('Helferliste – Daten');
+      props.setProperty('TABELLE_ID', ss.getId());
+    }
+  }
+  tabellenDateiCache_ = ss;
+  return ss;
 }
 
 function doGet(e) {
@@ -488,7 +516,7 @@ function ausfuehren_(anfrage) {
 }
 
 function ladeTabellen_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = tabellenDatei_();
   const tz = ss.getSpreadsheetTimeZone();
   const db = {};
   const blaetter = {};

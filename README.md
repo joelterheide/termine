@@ -23,23 +23,24 @@ Bis Schritt 3 erledigt ist, läuft die Seite im **Demo-Modus** mit Beispieldaten
 
 Im Repo auf **Settings → Pages**. Unter „Build and deployment“ als Source **Deploy from a branch** wählen, Branch **main** und Ordner **/ (root)**, dann **Save**. Nach ein bis zwei Minuten ist die Seite unter der Adresse oben erreichbar.
 
-### 2. Google Sheet mit Apps Script anlegen
+### 2. Google-Skript anlegen
 
-Am besten mit einem privaten Google-Konto. Bei Schul- oder Firmenkonten fehlt oft die Option „Zugriff: Jeder“.
+Das geht nur **am Computer im Browser**, denn in der Google-Sheets-App am Handy gibt es Apps Script nicht. Nimm am besten ein privates Google-Konto. Schulkonten sperren Apps Script oft oder erlauben „Zugriff: Jeder“ nicht.
 
-1. Neues Google Sheet anlegen (z. B. über [sheets.new](https://sheets.new)) und „Helferliste“ nennen.
-2. Im Sheet: **Erweiterungen → Apps Script**.
-3. Oben links auf „Unbenanntes Projekt“ klicken und in „Helferliste“ umbenennen.
-4. Den vorhandenen Code in `Code.gs` komplett löschen und den Inhalt von [`apps-script/Code.gs`](apps-script/Code.gs) einfügen. Auf GitHub die Datei öffnen und oben rechts den Knopf „Copy raw file“ nutzen.
-5. Die Zeile `const PASSWORT = 'bitte-aendern';` auf ein eigenes Passwort ändern. Das ist das Passwort zum Verwalten. Dann speichern (Strg+S).
-6. Oben in der Leiste die Funktion **einrichten** auswählen und auf **Ausführen** klicken. Google fragt nach Berechtigungen:
-   **Berechtigungen prüfen → eigenes Konto wählen → „Erweitert“ → „Zu Helferliste wechseln (unsicher)“ → Zulassen.**
-   Die Warnung ist bei selbst geschriebenen Skripten normal. Danach hat das Sheet die Blätter *Termine, Schichten, Aufgaben, Eintragungen*.
-7. **Bereitstellen → Neue Bereitstellung** → beim Zahnrad **Web-App** wählen.
+1. **[script.new](https://script.new)** öffnen. Das legt direkt ein neues Apps-Script-Projekt an. Ein Google Sheet musst du vorher nicht anlegen, das macht das Skript selbst.
+2. Oben links auf „Unbenanntes Projekt“ klicken und in „Helferliste“ umbenennen.
+3. Im Editor steht `function myFunction() { … }`. Das komplett löschen und den Inhalt von [`apps-script/Code.gs`](apps-script/Code.gs) einfügen. Auf GitHub die Datei öffnen und oben rechts über dem Code den Knopf „Copy raw file“ nutzen.
+4. Die Zeile `const PASSWORT = 'bitte-aendern';` auf ein eigenes Passwort ändern. Das ist das Passwort zum Verwalten. Dann speichern (Strg+S oder das Disketten-Symbol).
+5. In der Leiste über dem Code im Auswahlfeld die Funktion **einrichten** wählen und auf **Ausführen** klicken. Google fragt nach Berechtigungen:
+   **Berechtigungen prüfen → eigenes Konto wählen → „Erweitert“ → „Zu Helferliste wechseln (unsicher)“ → Zulassen** (falls Häkchen angezeigt werden: alle auswählen).
+   Die Warnung ist bei selbst geschriebenen Skripten normal. Unten im **Ausführungsprotokoll** steht danach der Link zur neuen Tabelle „Helferliste – Daten“. Sie liegt in deinem Google Drive.
+6. Oben rechts **Bereitstellen → Neue Bereitstellung** → beim Zahnrad **Web-App** wählen.
    - Ausführen als: **Ich**
    - Wer hat Zugriff: **Jeder**
 
    Dann **Bereitstellen** und die **Web-App-URL** kopieren. Sie endet auf `/exec`.
+
+Wenn du lieber ein vorhandenes Google Sheet nutzen willst, öffne es am Computer und wähle in der Menüleiste **Erweiterungen → Apps Script**. Danach geht es ab Schritt 2 genauso weiter, und die Daten landen direkt in diesem Sheet.
 
 ### 3. URL in die Website eintragen
 
