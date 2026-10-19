@@ -11,10 +11,12 @@ Eine schlichte Website, auf der man sich als Helfer für Termine und Aufgaben ei
 - **Eintragen** mit Namen und optionaler Notiz („bringe Waffeleisen mit“), **absagen** über das × neben dem Namen.
 - **Ein Klick:** Nach dem ersten Eintragen merkt sich der Browser den Namen. Danach trägt „Eintragen“ sofort ein, mit „Rückgängig“ für Fehlklicks. Den Namen kann man oben über „ändern“ wechseln.
 - **Weitere Personen eintragen:** Mit „+ weitere Person“ unter dem Knopf trägt man z. B. Familienmitglieder ein. Das geht auch, wenn man selbst nicht eingetragen ist, und der eigene gespeicherte Name bleibt dabei unverändert.
+- **Terminabstimmungen:** mehrere mögliche Daten (optional mit Uhrzeit) zur Wahl stellen. Jeder klickt bei allen passenden Daten auf „Passt mir“. Am Tag nach „Abstimmen bis“ wird automatisch der Termin mit den meisten Stimmen angelegt, bei Gleichstand der frühere. Über „festlegen“ kann man das auch vorher selbst entscheiden.
+- **Reagiert sofort:** Google braucht pro Anfrage ein bis drei Sekunden. Die Seite zeigt Eintragen, Absagen und Abstimmen trotzdem sofort an und bestätigt im Hintergrund. Beim Öffnen erscheint direkt der zuletzt geladene Stand.
 - **Plätze begrenzen** (2/2 = voll) oder beliebig viele zulassen.
 - **Meine Einträge:** Namen eingeben und alles auf einen Blick sehen, absagen, in den eigenen Kalender übernehmen.
 - **Per WhatsApp teilen:** erzeugt einen fertigen Text mit den offenen Plätzen und dem Link.
-- **Verwalten** mit Passwort: Termine, Schichten und Aufgaben anlegen, ändern, kopieren (z. B. für jeden Sonntag) und löschen.
+- **Verwalten** mit Passwort: Termine, Schichten, Aufgaben und Abstimmungen anlegen, ändern, kopieren (z. B. für jeden Sonntag) und löschen.
 - Funktioniert auf dem Handy, im Dunkelmodus und lässt sich als Aushang drucken.
 
 ## Einrichten
@@ -65,14 +67,14 @@ Tipp: Bei „Zeiten“ kann man mehrere auf einmal angeben, z. B. `14-16, 16-18,
 - Den Link in der WhatsApp-Gruppe anpinnen oder in die Gruppenbeschreibung schreiben.
 - **Offene Plätze per WhatsApp teilen** (oben bei den Terminen) erzeugt eine Übersicht zum Posten.
 - Wiederkehrende Termine wie das Kirchcafé mit **Kopieren** auf das nächste Datum übertragen. Die Schichten werden mitkopiert, die Namen nicht.
-- Im **Google Sheet** kann man alles direkt sehen und bearbeiten. Die Spalte *fuer* in „Eintragungen“ zeigt lesbar, wofür sich jemand eingetragen hat. Neue Zeilen ohne `id` bekommen automatisch eine. Blattnamen und Spaltenüberschriften nicht umbenennen. Eigene Zusatzspalten rechts daneben sind erlaubt.
+- Im **Google Sheet** kann man alles direkt sehen und bearbeiten. Die Spalte *fuer* in „Eintragungen“ zeigt lesbar, wofür sich jemand eingetragen hat. Neue Zeilen ohne `id` bekommen automatisch eine. Blattnamen und Spaltenüberschriften nicht umbenennen. Eigene Zusatzspalten rechts daneben sind erlaubt. Direkte Änderungen im Sheet erscheinen auf der Website nach spätestens zwei Minuten, weil das Skript die Daten kurz zwischenspeichert.
 
 ## Gut zu wissen
 
 - Wer den Link hat, kann sich eintragen und auch andere austragen, wie bei einer Liste am schwarzen Brett. Für eine Gemeindegruppe passt das meistens. Den Link deshalb nicht öffentlich posten.
 - Die eingetragenen Namen sind für alle mit dem Link sichtbar. Der Vorname reicht.
 - Das Passwort steht nur im Apps Script, **nie** in `config.js` oder sonst im Repo, denn das Repo ist öffentlich.
-- Wenn `Code.gs` geändert wird (auch beim Passwortwechsel): **Bereitstellen → Bereitstellungen verwalten →** Stift → Version: **Neue Version** → Bereitstellen. Die URL bleibt gleich.
+- **Neue Version von `Code.gs` einspielen:** Im Apps Script den gesamten Inhalt von `Code.gs` durch die neue Datei ersetzen und speichern. Dann **Bereitstellen → Bereitstellungen verwalten →** Stift → Version: **Neue Version** → Bereitstellen. Die URL bleibt gleich. Das Passwort wird gemerkt, die Zeile `const PASSWORT = 'bitte-aendern';` kann also so bleiben. Nur zum Ändern des Passworts trägst du dort ein neues ein.
 - Kosten entstehen keine.
 
 ## Dateien

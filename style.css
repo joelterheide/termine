@@ -244,6 +244,7 @@ textarea { resize: vertical; }
 }
 
 .person { white-space: nowrap; }
+.person.wartet { opacity: .55; }
 .person.ich { font-weight: 600; }
 .notiz { color: var(--leise); font-weight: 400; white-space: normal; }
 
@@ -269,6 +270,49 @@ textarea { resize: vertical; }
   font-size: .9375rem;
 }
 .trenn { color: var(--leise); }
+
+/* ---------- Abstimmungen ---------- */
+
+.abschnitt {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--leise);
+  margin: 1.75rem 0 0;
+  padding-bottom: .4rem;
+  border-bottom: 1px solid var(--linie);
+}
+
+.zeile.abst { grid-template-columns: 9.5rem 2rem 1fr auto; }
+.zeile.abst.vorn .z-zahl { color: var(--text); font-weight: 700; }
+
+button.gewaehlt {
+  background: var(--akzent);
+  border-color: var(--akzent);
+  color: var(--auf-akzent);
+}
+
+.ergebnis {
+  margin: 0;
+  padding: .9rem 0;
+  border-bottom: 1px solid var(--linie);
+}
+
+fieldset.optionen {
+  border: 0;
+  margin: 0 0 .5rem;
+  padding: 0;
+}
+fieldset.optionen legend {
+  font-size: .9375rem;
+  font-weight: 600;
+  padding: 0;
+  margin-bottom: .4rem;
+}
+.kasten p.tipp {
+  color: var(--leise);
+  font-size: .8125rem;
+  margin: 0 0 .9rem;
+}
 
 .vergangen-schalter {
   margin: 1.25rem 0 0;
@@ -408,6 +452,7 @@ form.zeile-form input { width: auto; flex: 0 1 14rem; }
       "zahl aktion"
       "namen namen";
   }
+  .zeile.abst { grid-template-columns: auto 1fr auto; }
   .meine li {
     grid-template-columns: 1fr auto;
   }

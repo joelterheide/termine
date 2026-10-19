@@ -235,7 +235,20 @@
       return a.frist ? -1 : b.frist ? 1 : 0;
     });
 
-    return { termine: termine, aufgaben: aufgaben };
+    var stimmen = {};
+    d.Stimmen.forEach(function (v) { (stimmen[v.option_id] = stimmen[v.option_id] || []).push(v); });
+    var abstimmungen = d.Abstimmungen.map(function (p) {
+      var optionen = d.Optionen.filter(function (o) { return o.abstimmung_id === p.id; }).map(function (o) {
+        var s = (stimmen[o.id] || []).slice().sort(function (a, b) { return String(a.zeitpunkt).localeCompare(String(b.zeitpunkt)); });
+        return Object.assign({}, o, { stimmen: s });
+      });
+      optionen.sort(function (a, b) { return (a.datum + ' ' + a.von) < (b.datum + ' ' + b.von) ? -1 : 1; });
+      var meiste = optionen.reduce(function (m, o) { return Math.max(m, o.stimmen.length); }, 0);
+      return Object.assign({}, p, { optionen: optionen, meiste: meiste });
+    });
+    abstimmungen.sort(function (a, b) { return String(a.frist).localeCompare(String(b.frist)); });
+
+    return { termine: termine, aufgaben: aufgaben, abstimmungen: abstimmungen };
   }
 
   function istVorbei(termin) { return termin.bis && termin.bis < heute(); }
@@ -279,6 +292,7 @@
 
   function render() {
     var gemerkt = merkeFormulare();
+    var fokus = merkeFokus();
 
     document.title = KONF.titel;
     document.getElementById('titel').textContent = KONF.titel;
@@ -302,6 +316,7 @@
     }
 
     stelleFormulareWiederHer(gemerkt);
+    stelleFokusWiederHer(fokus);
 
     if (z.springeZu && z.sicht) {
       var ziel = document.getElementById(z.springeZu);
@@ -316,8 +331,10 @@
 
   function hinweisHtml() {
     if (z.ladefehler) {
-      return '<div class="hinweis fehler">Die Daten konnten nicht geladen werden: ' + esc(z.ladefehler) +
-        ' <button class="link" data-aktion="neu-laden">Erneut versuchen</button></div>';
+      return '<div class="hinweis fehler">' +
+        (z.sicht ? 'Gerade keine Verbindung zum Server – du siehst den zuletzt geladenen Stand. '
+          : 'Die Daten konnten nicht geladen werden: ' + esc(z.ladefehler) + ' ') +
+        '<button class="link" data-aktion="neu-laden">Erneut versuchen</button></div>';
     }
     if (backend.demo) {
       return '<div class="hinweis"><strong>Demo-Modus.</strong> Die Seite ist noch nicht mit einem Google Sheet verbunden. ' +
@@ -369,10 +386,16 @@
     });
     var h = alsHtml() + '<div class="leiste">' +
       (offen ? '<button class="link" data-aktion="teilen-alle">Offene Plätze per WhatsApp teilen</button>' : '<span></span>') +
-      (admin() ? '<button data-aktion="termin-neu">+ Neuer Termin</button>' : '') +
+      (admin() ? '<span class="knoepfe"><button data-aktion="termin-neu">+ Neuer Termin</button>' +
+        '<button data-aktion="abstimmung-neu">+ Abstimmung</button></span>' : '') +
       '</div>';
 
     if (istOffen('termin', '')) h += terminFormular(null);
+    if (istOffen('abstimmung', '')) h += abstimmungFormular(null);
+
+    var abst = abstimmungenHtml();
+    if (abst) h += '<h2 class="abschnitt">Abstimmungen</h2>' + abst + '<h2 class="abschnitt">Termine</h2>';
+
     if (!kommend.length) h += '<p class="leer">Keine kommenden Termine.</p>';
     kommend.forEach(function (t) { h += terminHtml(t); });
 
@@ -383,6 +406,116 @@
       if (z.vergangene) vergangen.slice().reverse().forEach(function (t) { h += terminHtml(t); });
     }
     return h;
+  }
+
+  // ---------- Abstimmungen ----------
+
+  function abstimmungenHtml() {
+    var h = '';
+    z.sicht.abstimmungen.forEach(function (p) {
+      if (!p.status) { h += abstimmungHtml(p); return; }
+      var loeschen = admin() ? ' · <button class="link" data-aktion="abstimmung-loeschen" data-id="' + esc(p.id) + '">Abstimmung entfernen</button>' : '';
+      if (p.status === 'festgelegt') {
+        var t = finde(z.sicht.termine, p.termin_id);
+        var o = finde(p.optionen, p.ergebnis);
+        if (!t || istVorbei(t)) { if (admin()) h += '<p class="ergebnis leise">„' + esc(p.titel) + '“: Abstimmung abgeschlossen' + loeschen + '</p>'; return; }
+        h += '<p class="ergebnis">„' + esc(p.titel) + '“ ist per Abstimmung auf <strong>' + esc(datumLang(t.datum)) + '</strong> festgelegt' +
+          (o ? ' (' + o.stimmen.length + (o.stimmen.length === 1 ? ' Stimme' : ' Stimmen') + ')' : '') +
+          ' · <a href="#t-' + esc(t.id) + '">zum Termin</a>' + loeschen + '</p>';
+      } else if (admin()) {
+        h += '<p class="ergebnis leise">„' + esc(p.titel) + '“: Abstimmung ohne Stimmen beendet' + loeschen + '</p>';
+      }
+    });
+    return h;
+  }
+
+  function abstimmungHtml(p) {
+    var h = '<section class="termin abstimmung" id="p-' + esc(p.id) + '">';
+    if (istOffen('abstimmung', p.id)) {
+      h += abstimmungFormular(p);
+    } else {
+      var n = tageBis(p.frist);
+      var noch = n === 0 ? 'heute letzter Tag' : n === 1 ? 'noch bis morgen' : n > 1 ? 'noch ' + n + ' Tage' : '';
+      h += '<div class="t-datum">Abstimmung bis ' + esc(datumLang(p.frist)) + (noch ? ' · ' + noch : '') + '</div>';
+      h += '<h2>' + esc(p.titel) + '</h2>';
+      if (p.ort) h += '<div class="t-ort">' + esc(p.ort) + '</div>';
+      if (p.info) h += '<p class="info">' + mitLinks(p.info) + '</p>';
+      h += '<p class="leise klein">Wähle alle Termine, die dir passen. Danach wird automatisch der mit den meisten Stimmen festgelegt.</p>';
+    }
+    h += '<div class="schichten">';
+    p.optionen.forEach(function (o) { h += optionZeile(p, o); });
+    h += '</div>';
+
+    var links = ['<button class="link" data-aktion="teilen-abstimmung" data-id="' + esc(p.id) + '">Per WhatsApp teilen</button>'];
+    if (admin()) {
+      links.push('<button class="link" data-aktion="abstimmung-bearbeiten" data-id="' + esc(p.id) + '">Bearbeiten</button>');
+      links.push('<button class="link" data-aktion="abstimmung-loeschen" data-id="' + esc(p.id) + '">Löschen</button>');
+    }
+    h += '<div class="t-links">' + links.join('<span class="trenn"> · </span>') + '</div>';
+    return h + '</section>';
+  }
+
+  function optionZeile(p, o) {
+    var meine = o.stimmen.filter(function (v) { return ich(v.name); })[0];
+    var vorn = p.meiste > 0 && o.stimmen.length === p.meiste;
+    var h = '<div class="zeile abst' + (vorn ? ' vorn' : '') + '">';
+    h += '<span class="z-zeit">' + esc(datumKurz(o.datum) + (o.von ? ' · ' + o.von : '')) + '</span>';
+    h += '<span class="z-zahl" title="' + o.stimmen.length + (o.stimmen.length === 1 ? ' Stimme' : ' Stimmen') + (vorn ? ', vorne' : '') + '">' + o.stimmen.length + '</span>';
+    h += '<span class="z-namen">' + (o.stimmen.length ? o.stimmen.map(function (v) {
+      return '<span class="person' + (ich(v.name) ? ' ich' : '') + (istTmp(v.id) ? ' wartet' : '') + '">' + esc(v.name) + '</span>';
+    }).join(', ') : '<span class="leise">noch keine Stimme</span>') + '</span>';
+    h += '<span class="z-aktion">';
+    if (meine) {
+      h += '<button class="gewaehlt" data-aktion="stimme-weg" data-id="' + esc(meine.id) + '" aria-pressed="true" title="Stimme zurücknehmen">✓ passt</button>';
+    } else if (z.name) {
+      h += '<button data-aktion="stimmen" data-option="' + esc(o.id) + '" aria-pressed="false" title="Als ' + esc(z.name) + ' abstimmen">Passt mir</button>';
+    } else if (!istOffen('stimmen', o.id)) {
+      h += '<button data-aktion="stimmen-name" data-option="' + esc(o.id) + '">Passt mir</button>';
+    }
+    if (admin()) {
+      h += '<span class="verw"><button class="link" data-aktion="festlegen" data-id="' + esc(p.id) + '" data-option="' + esc(o.id) + '">festlegen</button>' +
+        '<button class="link" data-aktion="option-loeschen" data-id="' + esc(o.id) + '">löschen</button></span>';
+    }
+    h += '</span></div>';
+    if (istOffen('stimmen', o.id)) {
+      h += '<form class="eintragen" data-form="stimmen" data-id="' + esc(o.id) + '">' +
+        '<input name="name" placeholder="Dein Name" aria-label="Dein Name" maxlength="60" required autocomplete="name">' +
+        '<span class="knoepfe"><button type="submit" class="haupt">Abstimmen</button>' +
+        '<button type="button" data-aktion="schliessen">Abbrechen</button></span></form>';
+    }
+    return h;
+  }
+
+  function abstimmungFormular(p) {
+    p = p || {};
+    var zeilen = (z.offen && z.offen.zeilen) || (p.id ? 1 : 3);
+    var h = '<form class="kasten" data-form="abstimmung" data-id="' + esc(p.id || '') + '">' +
+      '<h3>' + (p.id ? 'Abstimmung bearbeiten' : 'Neue Terminabstimmung') + '</h3>' +
+      '<label>Titel des Termins<input name="titel" required maxlength="120" value="' + esc(p.titel || '') + '" placeholder="z. B. Sommerfest"></label>' +
+      '<div class="reihe"><label>Ort<input name="ort" maxlength="150" value="' + esc(p.ort || '') + '" placeholder="optional"></label>' +
+      '<label>Abstimmen bis<input type="date" name="frist" required value="' + esc(p.frist || plusTage(heute(), 7)) + '"></label></div>' +
+      '<label>Info<textarea name="info" rows="2" maxlength="2000" placeholder="optional">' + esc(p.info || '') + '</textarea></label>' +
+      '<fieldset class="optionen"><legend>' + (p.id ? 'Weitere mögliche Termine hinzufügen' : 'Mögliche Termine') + '</legend>';
+    for (var i = 0; i < zeilen; i++) {
+      h += '<div class="reihe"><label>Datum<input type="date" name="odatum_' + i + '"></label>' +
+        '<label>Uhrzeit (optional)<input type="time" name="ozeit_' + i + '"></label></div>';
+    }
+    h += '<button type="button" class="link" data-aktion="option-zeile">+ weiteres Datum</button></fieldset>' +
+      '<p class="tipp">Am Tag nach „Abstimmen bis“ wird automatisch der Termin mit den meisten Stimmen angelegt, ' +
+      'bei Gleichstand der frühere. Mit „festlegen“ kannst du auch vorher selbst entscheiden.</p>' +
+      '<div class="knoepfe"><button type="submit" class="haupt">Speichern</button>' +
+      '<button type="button" data-aktion="schliessen">Abbrechen</button></div></form>';
+    return h;
+  }
+
+  function abstimmungText(p) {
+    var zeilen = ['*Abstimmung: ' + p.titel + '*'];
+    if (p.ort) zeilen.push(p.ort);
+    zeilen.push('Welche Termine passen dir? Bitte bis ' + datumLang(p.frist) + ' abstimmen:');
+    p.optionen.forEach(function (o) { zeilen.push('• ' + datumLang(o.datum) + (o.von ? ', ' + o.von + ' Uhr' : '')); });
+    zeilen.push('');
+    zeilen.push('Abstimmen: ' + seitenLink('p-' + p.id));
+    return zeilen.join('\n');
   }
 
   function terminHtml(t) {
@@ -500,9 +633,10 @@
   function namenHtml(leute, vorbei) {
     if (!leute.length) return '<span class="leise">noch niemand</span>';
     return leute.map(function (e) {
-      return '<span class="person' + (ich(e.name) ? ' ich' : '') + '">' + esc(e.name) +
+      var wartet = istTmp(e.id);
+      return '<span class="person' + (ich(e.name) ? ' ich' : '') + (wartet ? ' wartet' : '') + '">' + esc(e.name) +
         (e.notiz ? ' <span class="notiz">(' + esc(e.notiz) + ')</span>' : '') +
-        (vorbei ? '' : '<button class="weg" data-aktion="austragen" data-id="' + esc(e.id) + '" title="absagen" aria-label="' + esc(e.name) + ' absagen">×</button>') +
+        (vorbei || wartet ? '' : '<button class="weg" data-aktion="austragen" data-id="' + esc(e.id) + '" title="absagen" aria-label="' + esc(e.name) + ' absagen">×</button>') +
         '</span>';
     }).join(', ');
   }
@@ -668,6 +802,27 @@
     });
     return gemerkt;
   }
+  // Kommt eine Antwort vom Server, während jemand tippt, bleiben Cursor und Markierung erhalten.
+  function merkeFokus() {
+    var el = document.activeElement;
+    if (!el || !el.name || !el.form || !el.form.getAttribute('data-form')) return null;
+    var f = { form: formSchluessel(el.form), name: el.name, start: null, ende: null };
+    try { f.start = el.selectionStart; f.ende = el.selectionEnd; } catch (e) { /* z. B. Datumsfeld */ }
+    return f;
+  }
+  function stelleFokusWiederHer(f) {
+    if (!f) return;
+    var forms = document.querySelectorAll('form[data-form]');
+    for (var i = 0; i < forms.length; i++) {
+      if (formSchluessel(forms[i]) !== f.form) continue;
+      var el = forms[i].elements[f.name];
+      if (!el || el === document.activeElement) return;
+      try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); }
+      if (f.start !== null) { try { el.setSelectionRange(f.start, f.ende); } catch (e) { /* egal */ } }
+      return;
+    }
+  }
+
   function stelleFormulareWiederHer(gemerkt) {
     document.querySelectorAll('form[data-form]').forEach(function (f) {
       var w = gemerkt[formSchluessel(f)];
@@ -706,14 +861,86 @@
   // Laden und Senden
   // =====================================================================
 
-  function setzeDaten(daten) {
-    z.daten = daten;
-    z.sicht = aufbereiten(daten);
+  // Google braucht pro Anfrage 1–3 Sekunden. Damit die Seite trotzdem sofort reagiert:
+  // - Änderungen wie Eintragen/Absagen werden gleich angezeigt („ausstehend“) und
+  //   verschwinden wieder, falls der Server sie ablehnt.
+  // - Der letzte Stand wird im Browser gemerkt und beim Öffnen sofort gezeigt.
+  var basis = null;
+  var ausstehend = [];
+  var tmpZaehler = 0;
+  var STAND = 'helferliste.stand';
+
+  function vollstaendig(d) {
+    d = d || {};
+    ['Termine', 'Schichten', 'Aufgaben', 'Eintragungen', 'Abstimmungen', 'Optionen', 'Stimmen'].forEach(function (t) {
+      if (!Array.isArray(d[t])) d[t] = [];
+    });
+    return d;
+  }
+
+  function setzeDaten(daten, merken) {
+    basis = vollstaendig(daten);
+    if (merken && !backend.demo) merke('localStorage', STAND, JSON.stringify({ api: KONF.api, daten: basis }));
+    zeigeStand();
+  }
+
+  function zeigeStand() {
+    var d = basis;
+    if (ausstehend.length) {
+      d = JSON.parse(JSON.stringify(basis));
+      ausstehend.forEach(function (a) { a.anwenden(d); });
+    }
+    z.daten = d;
+    z.sicht = aufbereiten(d);
+  }
+
+  function gemerkterStand() {
+    if (backend.demo) return;
+    try {
+      var s = JSON.parse(lies('localStorage', STAND) || 'null');
+      if (s && s.api === KONF.api && s.daten) setzeDaten(s.daten, false);
+    } catch (e) { /* egal */ }
+  }
+
+  function tmpId() { return 'tmp-' + (++tmpZaehler); }
+  function istTmp(id) { return /^tmp-/.test(id || ''); }
+
+  // Änderung sofort anzeigen und im Hintergrund senden
+  function sofort(anwenden, anfrage) {
+    var eintrag = { anwenden: anwenden };
+    ausstehend.push(eintrag);
+    zeigeStand();
+    render();
+    return senden(anfrage, null, eintrag);
+  }
+
+  function eintragenSofort(bezug, name, notiz) {
+    sofort(function (d) {
+      d.Eintragungen.push({ id: tmpId(), bezug: bezug, name: name, notiz: notiz || '', fuer: '', zeitpunkt: new Date().toISOString() });
+    }, { aktion: 'eintragen', bezug: bezug, name: name, notiz: notiz || '' }).then(function (a) {
+      if (a.ok) {
+        var neu = z.daten.Eintragungen.filter(function (x) { return x.bezug === bezug && gleicherName(x.name, name); })[0];
+        if (neu) zeigeMeldung(a.meldung, false, neu.id);
+      }
+      render();
+    });
+  }
+
+  function austragenSofort(id) {
+    sofort(function (d) {
+      d.Eintragungen = d.Eintragungen.filter(function (e) { return e.id !== id; });
+    }, { aktion: 'austragen', id: id }).then(render);
+  }
+
+  function stimmeSofort(optionId, name) {
+    sofort(function (d) {
+      d.Stimmen.push({ id: tmpId(), option_id: optionId, name: name, zeitpunkt: new Date().toISOString() });
+    }, { aktion: 'abstimmen', option_id: optionId, name: name }).then(render);
   }
 
   function laden(still) {
     return backend.lesen().then(function (a) {
-      if (a.daten) { setzeDaten(a.daten); z.ladefehler = ''; }
+      if (a.daten) { setzeDaten(a.daten, true); z.ladefehler = ''; }
       else if (!a.ok) throw new Error(a.fehler || 'unbekannter Fehler');
       render();
     }).catch(function (e) {
@@ -721,13 +948,18 @@
     });
   }
 
-  function senden(anfrage, knopf) {
+  function senden(anfrage, knopf, eintrag) {
     if (knopf) { knopf.disabled = true; knopf.setAttribute('data-text', knopf.textContent); knopf.textContent = '…'; }
     return backend.senden(anfrage).catch(function (e) {
       return { ok: false, fehler: e.message };
     }).then(function (a) {
       if (knopf) { knopf.disabled = false; knopf.textContent = knopf.getAttribute('data-text'); }
-      if (a.daten) setzeDaten(a.daten);
+      if (eintrag) ausstehend.splice(ausstehend.indexOf(eintrag), 1);
+      if (a.daten) setzeDaten(a.daten, true);
+      else if (eintrag) zeigeStand();
+      if (!a.ok && a.fehler === 'Unbekannte Aktion.') {
+        a.fehler = 'Dafür muss zuerst die neue Code.gs in Apps Script eingefügt und neu bereitgestellt werden (siehe Anleitung).';
+      }
       if (!a.ok && anfrage.passwort && /Falsches Passwort|gesperrt/.test(a.fehler || '')) abmelden();
       zeigeMeldung(a.ok ? a.meldung : a.fehler, !a.ok);
       return a;
@@ -893,25 +1125,84 @@
           z.name ? 'form[data-form=eintragen] input[name=notiz]' : 'form[data-form=eintragen] input[name=name]');
         break;
 
-      case 'schnell-eintragen': {
-        var bezug = el.getAttribute('data-bezug');
-        senden({ aktion: 'eintragen', bezug: bezug, name: z.name, notiz: '' }, el).then(function (a) {
-          if (a.ok) {
-            var neu = z.daten.Eintragungen.filter(function (x) { return x.bezug === bezug && ich(x.name); })[0];
-            if (neu) zeigeMeldung(a.meldung, false, neu.id);
-          }
-          render();
-        });
+      case 'schnell-eintragen':
+        eintragenSofort(el.getAttribute('data-bezug'), z.name, '');
         break;
-      }
 
       case 'weitere':
         oeffne({ art: 'eintragen', id: el.getAttribute('data-bezug'), weitere: true }, 'form[data-form=eintragen] input[name=name]');
         break;
 
       case 'rueckgaengig':
-        senden({ aktion: 'austragen', id: id }, el).then(render);
+        zeigeMeldung('');
+        austragenSofort(id);
         break;
+
+      case 'stimmen':
+        stimmeSofort(el.getAttribute('data-option'), z.name);
+        break;
+
+      case 'stimmen-name':
+        oeffne({ art: 'stimmen', id: el.getAttribute('data-option') }, 'form[data-form=stimmen] input[name=name]');
+        break;
+
+      case 'stimme-weg':
+        if (istTmp(id)) return;
+        sofort(function (d) {
+          d.Stimmen = d.Stimmen.filter(function (v) { return v.id !== id; });
+        }, { aktion: 'stimme_entfernen', id: id }).then(render);
+        break;
+
+      case 'teilen-abstimmung': {
+        var pt = finde(z.sicht.abstimmungen, id);
+        if (pt) teilen(abstimmungText(pt));
+        break;
+      }
+
+      case 'abstimmung-neu':
+        oeffne({ art: 'abstimmung', id: '', zeilen: 3 }, 'form[data-form=abstimmung] input[name=titel]');
+        break;
+
+      case 'abstimmung-bearbeiten':
+        oeffne({ art: 'abstimmung', id: id, zeilen: 1 }, 'form[data-form=abstimmung] input[name=titel]');
+        break;
+
+      case 'option-zeile': {
+        var n = (z.offen && z.offen.zeilen) || 1;
+        z.offen.zeilen = n + 1;
+        render();
+        var neuesFeld = document.querySelector('form[data-form=abstimmung] input[name=odatum_' + n + ']');
+        if (neuesFeld) neuesFeld.focus();
+        break;
+      }
+
+      case 'abstimmung-loeschen': {
+        var pl = finde(z.sicht.abstimmungen, id);
+        if (!pl || !window.confirm('Abstimmung „' + pl.titel + '“ mit allen Stimmen löschen?')) return;
+        verwalten({ aktion: 'abstimmung_loeschen', id: id }, el).then(render);
+        break;
+      }
+
+      case 'option-loeschen': {
+        var ol = finde(z.daten.Optionen, id);
+        var stimmenAnzahl = z.daten.Stimmen.filter(function (v) { return v.option_id === id; }).length;
+        var ofrage = (ol ? datumLang(ol.datum) + (ol.von ? ', ' + ol.von : '') : 'Auswahl') + ' aus der Abstimmung löschen?';
+        if (stimmenAnzahl) ofrage += '\n' + stimmenAnzahl + (stimmenAnzahl === 1 ? ' Stimme geht' : ' Stimmen gehen') + ' verloren.';
+        if (!window.confirm(ofrage)) return;
+        verwalten({ aktion: 'option_loeschen', id: id }, el).then(render);
+        break;
+      }
+
+      case 'festlegen': {
+        var of = finde(z.daten.Optionen, el.getAttribute('data-option'));
+        if (!of || !window.confirm('Termin auf ' + datumLang(of.datum) + (of.von ? ', ' + of.von + ' Uhr' : '') +
+          ' festlegen?\nDie Abstimmung ist damit beendet.')) return;
+        verwalten({ aktion: 'abstimmung_festlegen', id: id, option_id: of.id }, el).then(function (a) {
+          if (a.ok) z.springeZu = 't-' + a.id;
+          render();
+        });
+        break;
+      }
 
       case 'name-aendern':
         oeffne({ art: 'name' }, 'form[data-form=name] input');
@@ -923,7 +1214,7 @@
         var frage = ich(e.name) ? 'Wirklich absagen?' : e.name + ' austragen?';
         if (e.fuer) frage += '\n' + e.fuer;
         if (!window.confirm(frage)) return;
-        senden({ aktion: 'austragen', id: id }, el).then(render);
+        austragenSofort(id);
         break;
       }
 
@@ -1050,12 +1341,24 @@
         z.name = w.name;
         merke('localStorage', 'helferliste.name', w.name);
       }
-      senden({ aktion: 'eintragen', bezug: id, name: w.name, notiz: w.notiz }, knopf).then(function (a) {
-        if (a.ok) {
-          z.offen = null;
-          var neu = z.daten.Eintragungen.filter(function (x) { return x.bezug === id && gleicherName(x.name, w.name); })[0];
-          if (neu) zeigeMeldung(a.meldung, false, neu.id);
-        }
+      z.offen = null;
+      eintragenSofort(id, w.name, w.notiz);
+    } else if (art === 'stimmen') {
+      if (!w.name) return;
+      z.name = w.name;
+      merke('localStorage', 'helferliste.name', w.name);
+      z.offen = null;
+      stimmeSofort(id, w.name);
+    } else if (art === 'abstimmung') {
+      var optionen = [];
+      for (var i = 0; i < 100; i++) {
+        if (!(('odatum_' + i) in w)) break;
+        if (w['odatum_' + i] || w['ozeit_' + i]) optionen.push({ datum: w['odatum_' + i], von: w['ozeit_' + i] });
+      }
+      verwalten({ aktion: 'abstimmung_speichern', abstimmung: {
+        id: id, titel: w.titel, ort: w.ort, info: w.info, frist: w.frist, optionen: optionen
+      } }, knopf).then(function (a) {
+        if (a.ok) { z.offen = null; z.springeZu = 'p-' + (id || a.id); }
         render();
       });
     } else if (art === 'name') {
@@ -1132,6 +1435,7 @@
     if (h === 'aufgaben' || h === 'meine' || h === 'termine') z.reiter = h;
     else if (/^t-/.test(h)) { z.reiter = 'termine'; z.springeZu = h; }
     else if (/^a-/.test(h)) { z.reiter = 'aufgaben'; z.springeZu = h; }
+    else if (/^p-/.test(h)) { z.reiter = 'termine'; z.springeZu = h; }
     else if (!h) z.reiter = 'termine';
   }
 
@@ -1225,6 +1529,20 @@
         e('e13', 'a1', 'Jonas'),
         e('e14', 'a2', 'Maria', 'Apfelkuchen'), e('e15', 'a2', 'Sabine', 'Zimtschnecken'),
         e('e16', 'a4', 'Klaus'), e('e17', 'a4', 'Ute')
+      ],
+      Abstimmungen: [
+        { id: 'p1', titel: 'Dankeschön-Abend für alle Helfer', ort: 'Gemeindehaus', info: 'Mit Essen und Rückblick aufs Jahr.',
+          frist: tag(12), status: '', ergebnis: '', termin_id: '' }
+      ],
+      Optionen: [
+        { id: 'o1', abstimmung_id: 'p1', datum: plusTage(sonntag, 12), von: '19:00' },
+        { id: 'o2', abstimmung_id: 'p1', datum: plusTage(sonntag, 13), von: '18:00' },
+        { id: 'o3', abstimmung_id: 'p1', datum: plusTage(sonntag, 40), von: '19:00' }
+      ],
+      Stimmen: [
+        { id: 'v1', option_id: 'o1', name: 'Maria', zeitpunkt: jetzt }, { id: 'v2', option_id: 'o1', name: 'Thomas', zeitpunkt: jetzt },
+        { id: 'v3', option_id: 'o2', name: 'Maria', zeitpunkt: jetzt }, { id: 'v4', option_id: 'o2', name: 'Klaus', zeitpunkt: jetzt },
+        { id: 'v5', option_id: 'o2', name: 'Ute', zeitpunkt: jetzt }, { id: 'v6', option_id: 'o3', name: 'Sabine', zeitpunkt: jetzt }
       ]
     };
   }
@@ -1234,6 +1552,7 @@
   // =====================================================================
 
   ankerLesen();
+  gemerkterStand();
   render();
   laden();
 })();

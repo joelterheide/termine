@@ -20,21 +20,30 @@
 // ===================== EINSTELLUNG =====================
 
 // Passwort für „Verwalten“ (Termine/Aufgaben anlegen, ändern, löschen).
-// Unbedingt ändern! Nur hier im Apps Script eintragen, nicht auf GitHub.
+// Nur hier im Apps Script eintragen, nicht auf GitHub.
+// Das Passwort wird gespeichert: Wenn du später eine neue Version dieser Datei
+// einfügst, kannst du 'bitte-aendern' stehen lassen – das alte Passwort gilt weiter.
 const PASSWORT = 'bitte-aendern';
 
 // ============ AB HIER NICHTS ÄNDERN NÖTIG ==============
 
 const STANDARD_PASSWORT = 'bitte-aendern';
+const ZEITZONE = 'Europe/Berlin';
 
 const TABELLEN = {
   Termine: ['id', 'titel', 'datum', 'ort', 'info'],
   Schichten: ['id', 'termin_id', 'station', 'datum', 'von', 'bis', 'anzahl', 'info'],
   Aufgaben: ['id', 'titel', 'info', 'frist', 'anzahl'],
-  Eintragungen: ['id', 'bezug', 'name', 'notiz', 'fuer', 'zeitpunkt']
+  Eintragungen: ['id', 'bezug', 'name', 'notiz', 'fuer', 'zeitpunkt'],
+  Abstimmungen: ['id', 'titel', 'ort', 'info', 'frist', 'status', 'ergebnis', 'termin_id'],
+  Optionen: ['id', 'abstimmung_id', 'datum', 'von'],
+  Stimmen: ['id', 'option_id', 'name', 'zeitpunkt']
 };
 
-const ID_PRAEFIX = { Termine: 't', Schichten: 's', Aufgaben: 'a', Eintragungen: 'e' };
+const ID_PRAEFIX = {
+  Termine: 't', Schichten: 's', Aufgaben: 'a', Eintragungen: 'e',
+  Abstimmungen: 'p', Optionen: 'o', Stimmen: 'v'
+};
 
 const SPALTENTYP = {
   datum: 'datum', frist: 'datum', von: 'zeit', bis: 'zeit',
@@ -45,7 +54,9 @@ const VERWALTUNG = {
   anmelden: true,
   termin_speichern: true, termin_loeschen: true, termin_kopieren: true,
   schicht_speichern: true, schicht_loeschen: true,
-  aufgabe_speichern: true, aufgabe_loeschen: true
+  aufgabe_speichern: true, aufgabe_loeschen: true,
+  abstimmung_speichern: true, abstimmung_loeschen: true,
+  abstimmung_festlegen: true, option_loeschen: true
 };
 
 // =======================================================
@@ -56,13 +67,15 @@ const VERWALTUNG = {
  * Führt eine Anfrage auf den Daten aus.
  * db:      { Termine: [...], Schichten: [...], Aufgaben: [...], Eintragungen: [...] }
  * anfrage: { aktion: 'eintragen', ... }
- * opt:     { passwort: '...' }
+ * opt:     { passwort: '...', heute: 'JJJJ-MM-TT' }
  * Rückgabe: { aenderungen: [...], meldung: '...', id: '...' }
  */
 function verarbeite(db, anfrage, opt) {
   const ctx = { db: db, opt: opt || {}, aenderungen: [] };
+  if (!ctx.opt.heute) ctx.opt.heute = heuteLokal_();
   Object.keys(TABELLEN).forEach(function (t) { if (!db[t]) db[t] = []; });
   normalisiere_(ctx);
+  schliesseAbgelaufene_(ctx);
 
   anfrage = anfrage || {};
   const aktion = String(anfrage.aktion || 'daten');
@@ -250,8 +263,154 @@ const AKTIONEN = {
     eintragungenVon_(ctx.db, g.id).forEach(function (e) { loesche_(ctx, 'Eintragungen', e); });
     loesche_(ctx, 'Aufgaben', g);
     return 'Aufgabe gelöscht.';
+  },
+
+  // ---------- Abstimmungen ----------
+
+  abstimmen: function (ctx, a) {
+    const name = einzeilig_(a.name, 60).replace(/^[=+\-@]+/, '').trim();
+    if (!name) throw fehler_('Bitte deinen Namen eingeben.');
+    const o = finde_(ctx.db.Optionen, a.option_id);
+    if (!o) throw fehler_('Diese Auswahl gibt es nicht mehr. Bitte Seite neu laden.');
+    offeneAbstimmung_(ctx, o.abstimmung_id);
+    if (stimmenVon_(ctx.db, o.id).some(function (v) { return gleicherName_(v.name, name); })) {
+      throw fehler_(name + ' hat hier schon abgestimmt.');
+    }
+    neu_(ctx, 'Stimmen', { option_id: o.id, name: name, zeitpunkt: new Date().toISOString() });
+    return 'Stimme gespeichert.';
+  },
+
+  stimme_entfernen: function (ctx, a) {
+    const v = finde_(ctx.db.Stimmen, a.id);
+    if (!v) throw fehler_('Diese Stimme gibt es nicht mehr.');
+    const o = finde_(ctx.db.Optionen, v.option_id);
+    if (o) offeneAbstimmung_(ctx, o.abstimmung_id);
+    loesche_(ctx, 'Stimmen', v);
+    return 'Stimme entfernt.';
+  },
+
+  abstimmung_speichern: function (ctx, a) {
+    const g = a.abstimmung || {};
+    const titel = einzeilig_(g.titel, 120);
+    if (!titel) throw fehler_('Bitte einen Titel angeben.');
+    const frist = datum_(g.frist);
+    if (!frist) throw fehler_('Bitte angeben, bis wann abgestimmt werden kann.');
+    if (frist < ctx.opt.heute) throw fehler_('„Abstimmen bis“ liegt in der Vergangenheit.');
+    const daten = { titel: titel, ort: einzeilig_(g.ort, 150), info: mehrzeilig_(g.info, 2000), frist: frist };
+
+    const neueOptionen = [];
+    (g.optionen || []).forEach(function (x) {
+      if (!x || (!x.datum && !x.von)) return;
+      const d = datum_(x.datum);
+      if (!d) throw fehler_('Bitte für jede Auswahl ein gültiges Datum angeben.');
+      const z = x.von ? zeit_(x.von) : '';
+      if (x.von && !z) throw fehler_('Uhrzeit „' + x.von + '“ nicht verstanden.');
+      neueOptionen.push({ datum: d, von: z });
+    });
+
+    let p;
+    if (g.id) {
+      p = offeneAbstimmung_(ctx, g.id);
+      aendere_(ctx, 'Abstimmungen', p, daten);
+    } else {
+      if (neueOptionen.length < 2) throw fehler_('Bitte mindestens zwei mögliche Termine angeben.');
+      p = neu_(ctx, 'Abstimmungen', Object.assign({ status: '', ergebnis: '', termin_id: '' }, daten));
+    }
+    const vorhanden = optionenVon_(ctx.db, p.id).map(function (o) { return o.datum + ' ' + o.von; });
+    neueOptionen.forEach(function (o) {
+      if (vorhanden.indexOf(o.datum + ' ' + o.von) >= 0) return; // doppelt
+      vorhanden.push(o.datum + ' ' + o.von);
+      neu_(ctx, 'Optionen', { abstimmung_id: p.id, datum: o.datum, von: o.von });
+    });
+    return g.id ? 'Abstimmung gespeichert.' : { meldung: 'Abstimmung angelegt.', id: p.id };
+  },
+
+  abstimmung_loeschen: function (ctx, a) {
+    const p = finde_(ctx.db.Abstimmungen, a.id);
+    if (!p) throw fehler_('Abstimmung nicht gefunden.');
+    optionenVon_(ctx.db, p.id).forEach(function (o) { loescheOption_(ctx, o); });
+    loesche_(ctx, 'Abstimmungen', p);
+    return 'Abstimmung gelöscht.';
+  },
+
+  option_loeschen: function (ctx, a) {
+    const o = finde_(ctx.db.Optionen, a.id);
+    if (!o) throw fehler_('Auswahl nicht gefunden.');
+    offeneAbstimmung_(ctx, o.abstimmung_id);
+    loescheOption_(ctx, o);
+    return 'Auswahl gelöscht.';
+  },
+
+  abstimmung_festlegen: function (ctx, a) {
+    const p = offeneAbstimmung_(ctx, a.id);
+    const t = festlegen_(ctx, p, a.option_id);
+    return { meldung: 'Termin festgelegt.', id: t.id };
   }
 };
+
+// ---------- Abstimmungen: Hilfsfunktionen ----------
+
+function optionenVon_(db, abstimmungId) {
+  return db.Optionen.filter(function (o) { return o.abstimmung_id === abstimmungId; });
+}
+
+function stimmenVon_(db, optionId) {
+  return db.Stimmen.filter(function (v) { return v.option_id === optionId; });
+}
+
+function loescheOption_(ctx, o) {
+  stimmenVon_(ctx.db, o.id).forEach(function (v) { loesche_(ctx, 'Stimmen', v); });
+  loesche_(ctx, 'Optionen', o);
+}
+
+function offeneAbstimmung_(ctx, id) {
+  const p = finde_(ctx.db.Abstimmungen, id);
+  if (!p) throw fehler_('Abstimmung nicht gefunden.');
+  if (p.status) throw fehler_('Die Abstimmung ist schon beendet.');
+  return p;
+}
+
+/** Nach Ablauf der Frist automatisch den Termin mit den meisten Stimmen festlegen. */
+function schliesseAbgelaufene_(ctx) {
+  ctx.db.Abstimmungen.forEach(function (p) {
+    if (!p.status && p.frist && p.frist < ctx.opt.heute) festlegen_(ctx, p, '');
+  });
+}
+
+/**
+ * Legt den Termin fest: die gewählte Option oder – ohne Angabe – die mit den
+ * meisten Stimmen (bei Gleichstand die frühere). Ohne Stimmen: „beendet“, kein Termin.
+ */
+function festlegen_(ctx, p, optionId) {
+  const optionen = optionenVon_(ctx.db, p.id).slice().sort(function (x, y) {
+    return (x.datum + ' ' + x.von) < (y.datum + ' ' + y.von) ? -1 : 1;
+  });
+  let gewinner = null;
+  if (optionId) {
+    gewinner = finde_(optionen, optionId);
+    if (!gewinner) throw fehler_('Diese Auswahl gehört nicht zur Abstimmung.');
+  } else {
+    let meiste = 0;
+    optionen.forEach(function (o) {
+      const n = stimmenVon_(ctx.db, o.id).length;
+      if (n > meiste) { meiste = n; gewinner = o; }
+    });
+    if (!gewinner) {
+      aendere_(ctx, 'Abstimmungen', p, { status: 'beendet' });
+      return null;
+    }
+  }
+  let info = gewinner.von ? 'Beginn: ' + gewinner.von + ' Uhr' : '';
+  if (p.info) info += (info ? '\n' : '') + p.info;
+  const t = neu_(ctx, 'Termine', { titel: p.titel, datum: gewinner.datum, ort: p.ort, info: info });
+  aendere_(ctx, 'Abstimmungen', p, { status: 'festgelegt', ergebnis: gewinner.id, termin_id: t.id });
+  return t;
+}
+
+function heuteLokal_() {
+  const d = new Date();
+  return d.getFullYear() + '-' + zweistellig_(d.getMonth() + 1) + '-' + zweistellig_(d.getDate());
+}
 
 // ---------- Hilfsfunktionen der Logik ----------
 
@@ -437,6 +596,7 @@ function plusTage_(d, n) {
 
 /** Einmal im Editor ausführen: legt die Tabelle an und fragt die Berechtigung ab. */
 function einrichten() {
+  passwort_();
   ladeTabellen_();
   Logger.log('Fertig. Deine Daten-Tabelle: ' + tabellenDatei_().getUrl());
   Logger.log('Jetzt oben rechts „Bereitstellen → Neue Bereitstellung → Web-App“ wählen.');
@@ -485,33 +645,92 @@ function antwort_(anfrage) {
       ok: false,
       fehler: err && err.nutzerfehler ? err.message : 'Fehler auf dem Server: ' + (err && err.message ? err.message : err)
     };
-    try { ergebnis.daten = oeffentlich(ladeTabellen_().db); } catch (x) { /* egal */ }
+    try { ergebnis.daten = ausCache_() || oeffentlich(ladeTabellen_().db); } catch (x) { /* egal */ }
   }
   return ContentService.createTextOutput(JSON.stringify(ergebnis))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
 function ausfuehren_(anfrage) {
-  const opt = { passwort: PASSWORT };
-  const nurLesen = anfrage.aktion === 'daten' || anfrage.aktion === 'anmelden';
+  const opt = { passwort: passwort_(), heute: Utilities.formatDate(new Date(), ZEITZONE, 'yyyy-MM-dd') };
 
-  if (nurLesen) {
-    const ctx = ladeTabellen_();
-    const erg = verarbeite(ctx.db, anfrage, opt);
-    // Nur wenn im Sheet IDs fehlten, muss doch geschrieben werden.
-    if (!erg.aenderungen.length) return { ok: true, meldung: erg.meldung, daten: oeffentlich(ctx.db) };
+  // Lesen geht meist aus dem Zwischenspeicher – das spart das Laden der Tabelle.
+  if (anfrage.aktion === 'daten') {
+    const gemerkt = ausCache_();
+    if (gemerkt) return { ok: true, meldung: '', daten: gemerkt };
+  }
+  // Anmelden prüft nur das Passwort.
+  if (anfrage.aktion === 'anmelden') {
+    const erg = verarbeite({}, anfrage, opt);
+    return { ok: true, meldung: erg.meldung };
   }
 
+  // Alles andere unter Sperre: So überschreiben sich gleichzeitige Eintragungen nicht,
+  // und der Zwischenspeicher enthält immer den neuesten Stand.
   const lock = LockService.getScriptLock();
   lock.waitLock(25000);
   try {
     const ctx = ladeTabellen_();
     const erg = verarbeite(ctx.db, anfrage, opt);
-    schreibe_(ctx, erg.aenderungen);
-    SpreadsheetApp.flush();
-    return { ok: true, meldung: erg.meldung, id: erg.id, daten: oeffentlich(ctx.db) };
+    if (erg.aenderungen.length) {
+      schreibe_(ctx, erg.aenderungen);
+      SpreadsheetApp.flush();
+    }
+    const daten = oeffentlich(ctx.db);
+    inCache_(daten);
+    return { ok: true, meldung: erg.meldung, id: erg.id, daten: daten };
   } finally {
     lock.releaseLock();
+  }
+}
+
+/** Passwort aus Code.gs – oder, falls dort noch 'bitte-aendern' steht, das zuletzt gespeicherte. */
+function passwort_() {
+  const props = PropertiesService.getScriptProperties();
+  if (PASSWORT && PASSWORT !== STANDARD_PASSWORT) {
+    if (props.getProperty('PASSWORT') !== PASSWORT) props.setProperty('PASSWORT', PASSWORT);
+    return PASSWORT;
+  }
+  return props.getProperty('PASSWORT') || STANDARD_PASSWORT;
+}
+
+// ---------- Zwischenspeicher (CacheService, max. 100 KB je Eintrag → in Stücken) ----------
+
+const CACHE_SCHLUESSEL = 'helferliste-daten';
+const CACHE_SEKUNDEN = 120; // direkte Änderungen im Sheet erscheinen spätestens nach 2 Minuten
+
+function inCache_(daten) {
+  try {
+    const text = JSON.stringify(daten);
+    const marke = Math.random().toString(36).slice(2, 8);
+    const teile = {};
+    let n = 0;
+    for (let i = 0; i < text.length; i += 30000) teile[CACHE_SCHLUESSEL + '-' + marke + '-' + (n++)] = text.slice(i, i + 30000);
+    const cache = CacheService.getScriptCache();
+    if (n > 25) { cache.remove(CACHE_SCHLUESSEL); return; }
+    cache.putAll(teile, CACHE_SEKUNDEN + 60);
+    cache.put(CACHE_SCHLUESSEL, marke + ':' + n, CACHE_SEKUNDEN);
+  } catch (e) { /* ohne Zwischenspeicher geht es auch */ }
+}
+
+function ausCache_() {
+  try {
+    const cache = CacheService.getScriptCache();
+    const kopf = cache.get(CACHE_SCHLUESSEL);
+    if (!kopf) return null;
+    const marke = kopf.split(':')[0];
+    const n = parseInt(kopf.split(':')[1], 10);
+    const schluessel = [];
+    for (let i = 0; i < n; i++) schluessel.push(CACHE_SCHLUESSEL + '-' + marke + '-' + i);
+    const werte = cache.getAll(schluessel);
+    let text = '';
+    for (let i = 0; i < n; i++) {
+      if (werte[schluessel[i]] == null) return null;
+      text += werte[schluessel[i]];
+    }
+    return JSON.parse(text);
+  } catch (e) {
+    return null;
   }
 }
 
