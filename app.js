@@ -367,7 +367,7 @@
     var offen = kommend.some(function (t) {
       return t.schichten.some(function (s) { return s.tag >= heute() && freiePlaetze(s) > 0; });
     });
-    var h = '<div class="leiste">' +
+    var h = alsHtml() + '<div class="leiste">' +
       (offen ? '<button class="link" data-aktion="teilen-alle">Offene Plätze per WhatsApp teilen</button>' : '<span></span>') +
       (admin() ? '<button data-aktion="termin-neu">+ Neuer Termin</button>' : '') +
       '</div>';
@@ -450,7 +450,7 @@
     h += zahlHtml(n, max);
     h += '<span class="z-namen">' + namenHtml(s.leute, vorbei) +
       (s.info ? '<span class="z-info">' + esc(s.info) + '</span>' : '') + '</span>';
-    h += '<span class="z-aktion">' + aktionHtml(s.id, vorbei, voll);
+    h += '<span class="z-aktion">' + aktionHtml(s.id, vorbei, voll, s.leute, false);
     if (admin()) {
       h += '<span class="verw"><button class="link" data-aktion="schicht-bearbeiten" data-id="' + esc(s.id) + '" data-termin="' + esc(t.id) + '">ändern</button>' +
         '<button class="link" data-aktion="schicht-loeschen" data-id="' + esc(s.id) + '">löschen</button></span>';
@@ -465,11 +465,30 @@
     return '<span class="z-zahl" title="' + titel + '">' + n + '/' + (max || '∞') + '</span>';
   }
 
-  function aktionHtml(bezug, vorbei, voll) {
+  // Ist ein Name im Browser gespeichert, trägt „Eintragen“ mit einem Klick ein.
+  // Sonst öffnet sich das Formular (danach ist der Name gespeichert).
+  function aktionHtml(bezug, vorbei, voll, leute, mitNotiz) {
     if (vorbei) return '<span class="leise">vorbei</span>';
+    if (leute.some(function (e) { return ich(e.name); })) return '<span class="leise">eingetragen</span>';
     if (voll) return '<span class="leise">voll</span>';
     if (istOffen('eintragen', bezug)) return '';
+    if (z.name) {
+      return '<button data-aktion="schnell-eintragen" data-bezug="' + esc(bezug) + '" title="Als ' + esc(z.name) + ' eintragen">Eintragen</button>' +
+        (mitNotiz ? '<span class="verw"><button class="link" data-aktion="eintragen" data-bezug="' + esc(bezug) + '">mit Notiz</button></span>' : '');
+    }
     return '<button data-aktion="eintragen" data-bezug="' + esc(bezug) + '">Eintragen</button>';
+  }
+
+  function alsHtml() {
+    if (istOffen('name')) {
+      return '<form class="name-form als" data-form="name">' +
+        '<input name="name" value="' + esc(z.name) + '" maxlength="60" autocomplete="name" aria-label="Dein Name" placeholder="Dein Name">' +
+        '<button type="submit">Speichern</button>' +
+        '<button type="button" data-aktion="schliessen">Abbrechen</button></form>';
+    }
+    if (!z.name) return '';
+    return '<p class="als">Du trägst dich ein als <strong>' + esc(z.name) + '</strong> · ' +
+      '<button class="link" data-aktion="name-aendern">ändern</button></p>';
   }
 
   function namenHtml(leute, vorbei) {
@@ -495,7 +514,7 @@
   function aufgabenHtml() {
     var liste = offeneAufgaben();
     var abgelaufen = z.sicht.aufgaben.filter(istAbgelaufen);
-    var h = '<div class="leiste"><span class="leise">Aufgaben ohne festen Termin</span>' +
+    var h = alsHtml() + '<div class="leiste"><span class="leise">Aufgaben ohne festen Termin</span>' +
       (admin() ? '<button data-aktion="aufgabe-neu">+ Neue Aufgabe</button>' : '') + '</div>';
     if (istOffen('aufgabe', '')) h += aufgabeFormular(null);
     if (!liste.length) h += '<p class="leer">Gerade keine offenen Aufgaben.</p>';
@@ -527,7 +546,7 @@
     h += '<div class="schichten"><div class="zeile ohne-zeit' + (voll ? ' ist-voll' : '') + '">' +
       zahlHtml(n, max) +
       '<span class="z-namen">' + namenHtml(g.leute, vorbei) + '</span>' +
-      '<span class="z-aktion">' + aktionHtml(g.id, vorbei, voll) + '</span></div>';
+      '<span class="z-aktion">' + aktionHtml(g.id, vorbei, voll, g.leute, true) + '</span></div>';
     if (istOffen('eintragen', g.id) && !vorbei && !voll) h += eintragFormular(g.id);
     h += '</div>';
 
@@ -655,14 +674,23 @@
   // =====================================================================
 
   var meldungTimer = null;
-  function zeigeMeldung(text, istFehler) {
+  // rueckgaengig: ID einer Eintragung, die man direkt wieder löschen kann
+  function zeigeMeldung(text, istFehler, rueckgaengig) {
     var el = document.getElementById('meldung');
     if (!text) { el.hidden = true; return; }
     el.textContent = text;
+    if (rueckgaengig) {
+      var b = document.createElement('button');
+      b.className = 'link';
+      b.textContent = 'Rückgängig';
+      b.setAttribute('data-aktion', 'rueckgaengig');
+      b.setAttribute('data-id', rueckgaengig);
+      el.appendChild(b);
+    }
     el.className = 'meldung' + (istFehler ? ' fehler' : '');
     el.hidden = false;
     clearTimeout(meldungTimer);
-    meldungTimer = setTimeout(function () { el.hidden = true; }, istFehler ? 7000 : 3500);
+    meldungTimer = setTimeout(function () { el.hidden = true; }, istFehler ? 7000 : rueckgaengig ? 6000 : 3500);
   }
 
   // =====================================================================
@@ -856,6 +884,26 @@
           z.name ? 'form[data-form=eintragen] input[name=notiz]' : 'form[data-form=eintragen] input[name=name]');
         break;
 
+      case 'schnell-eintragen': {
+        var bezug = el.getAttribute('data-bezug');
+        senden({ aktion: 'eintragen', bezug: bezug, name: z.name, notiz: '' }, el).then(function (a) {
+          if (a.ok) {
+            var neu = z.daten.Eintragungen.filter(function (x) { return x.bezug === bezug && ich(x.name); })[0];
+            if (neu) zeigeMeldung(a.meldung, false, neu.id);
+          }
+          render();
+        });
+        break;
+      }
+
+      case 'rueckgaengig':
+        senden({ aktion: 'austragen', id: id }, el).then(render);
+        break;
+
+      case 'name-aendern':
+        oeffne({ art: 'name' }, 'form[data-form=name] input');
+        break;
+
       case 'austragen': {
         var e = finde(z.daten.Eintragungen, id);
         if (!e) return;
@@ -993,6 +1041,7 @@
     } else if (art === 'name') {
       z.name = w.name;
       merke('localStorage', 'helferliste.name', w.name);
+      z.offen = null;
       render();
     } else if (art === 'login') {
       senden({ aktion: 'anmelden', passwort: w.passwort }, knopf).then(function (a) {

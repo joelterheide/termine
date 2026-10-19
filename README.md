@@ -9,6 +9,7 @@ Eine schlichte Website, auf der man sich als Helfer für Termine und Aufgaben ei
 - **Termine** mit Datum, Ort und Info. Darunter Stationen (z. B. Glühweinstand, Kasse) mit eigenen Uhrzeiten, auch über mehrere Tage.
 - **Aufgaben ohne festen Termin**, z. B. Kuchen backen oder Plakate aufhängen, optional mit „erledigen bis“.
 - **Eintragen** mit Namen und optionaler Notiz („bringe Waffeleisen mit“), **absagen** über das × neben dem Namen.
+- **Ein Klick:** Nach dem ersten Eintragen merkt sich der Browser den Namen. Danach trägt „Eintragen“ sofort ein, mit „Rückgängig“ für Fehlklicks. Den Namen kann man oben über „ändern“ wechseln.
 - **Plätze begrenzen** (2/2 = voll) oder beliebig viele zulassen.
 - **Meine Einträge:** Namen eingeben und alles auf einen Blick sehen, absagen, in den eigenen Kalender übernehmen.
 - **Per WhatsApp teilen:** erzeugt einen fertigen Text mit den offenen Plätzen und dem Link.

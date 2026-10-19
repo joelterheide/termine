@@ -158,6 +158,14 @@ textarea { resize: vertical; }
   font-size: .9375rem;
 }
 
+.als {
+  margin: .9rem 0 0;
+  padding: 0;
+  font-size: .9375rem;
+  color: var(--leise);
+}
+.als strong { color: var(--text); font-weight: 600; }
+
 .leer {
   color: var(--leise);
   padding: 1.25rem 0;
@@ -335,6 +343,7 @@ form.zeile-form input { width: auto; flex: 0 1 14rem; }
   padding: 1rem 0 .25rem;
 }
 .name-form input { flex: 0 1 16rem; width: auto; }
+.name-form.als { margin: 0; padding: .9rem 0 0; }
 
 .meine {
   list-style: none;
@@ -376,6 +385,11 @@ form.zeile-form input { width: auto; flex: 0 1 14rem; }
   z-index: 10;
 }
 .meldung.fehler { background: var(--fehler); color: #fff; }
+.meldung button.link {
+  color: inherit;
+  margin-left: .9rem;
+  font-weight: 600;
+}
 
 /* ---------- Handy ---------- */
 
