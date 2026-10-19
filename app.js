@@ -467,16 +467,22 @@
 
   // Ist ein Name im Browser gespeichert, trägt „Eintragen“ mit einem Klick ein.
   // Sonst öffnet sich das Formular (danach ist der Name gespeichert).
+  // „+ weitere Person“ öffnet das Namensfeld, um andere einzutragen – auch ohne sich selbst einzutragen.
   function aktionHtml(bezug, vorbei, voll, leute, mitNotiz) {
     if (vorbei) return '<span class="leise">vorbei</span>';
-    if (leute.some(function (e) { return ich(e.name); })) return '<span class="leise">eingetragen</span>';
-    if (voll) return '<span class="leise">voll</span>';
-    if (istOffen('eintragen', bezug)) return '';
-    if (z.name) {
-      return '<button data-aktion="schnell-eintragen" data-bezug="' + esc(bezug) + '" title="Als ' + esc(z.name) + ' eintragen">Eintragen</button>' +
-        (mitNotiz ? '<span class="verw"><button class="link" data-aktion="eintragen" data-bezug="' + esc(bezug) + '">mit Notiz</button></span>' : '');
-    }
-    return '<button data-aktion="eintragen" data-bezug="' + esc(bezug) + '">Eintragen</button>';
+    var dabei = leute.some(function (e) { return ich(e.name); });
+    var eingetragen = '<span class="leise">eingetragen</span>';
+    if (istOffen('eintragen', bezug)) return dabei ? eingetragen : '';
+    if (voll) return dabei ? eingetragen : '<span class="leise">voll</span>';
+    var b = esc(bezug);
+    if (!z.name) return '<button data-aktion="eintragen" data-bezug="' + b + '">Eintragen</button>';
+
+    var links = [];
+    if (mitNotiz && !dabei) links.push('<button class="link" data-aktion="eintragen" data-bezug="' + b + '">mit Notiz</button>');
+    links.push('<button class="link" data-aktion="weitere" data-bezug="' + b + '">+ weitere Person</button>');
+    return (dabei ? eingetragen
+      : '<button data-aktion="schnell-eintragen" data-bezug="' + b + '" title="Als ' + esc(z.name) + ' eintragen">Eintragen</button>') +
+      '<span class="verw">' + links.join('') + '</span>';
   }
 
   function alsHtml() {
@@ -502,8 +508,11 @@
   }
 
   function eintragFormular(bezug) {
-    return '<form class="eintragen" data-form="eintragen" data-id="' + esc(bezug) + '">' +
-      '<input name="name" placeholder="Dein Name" aria-label="Dein Name" maxlength="60" required autocomplete="name" value="' + esc(z.name) + '">' +
+    var weitere = !!(z.offen && z.offen.weitere);
+    var text = weitere ? 'Name der Person' : 'Dein Name';
+    return '<form class="eintragen" data-form="eintragen" data-id="' + esc(bezug) + '"' + (weitere ? ' data-weitere="1"' : '') + '>' +
+      '<input name="name" placeholder="' + text + '" aria-label="' + text + '" maxlength="60" required' +
+      (weitere ? ' autocomplete="off" value=""' : ' autocomplete="name" value="' + esc(z.name) + '"') + '>' +
       '<input name="notiz" placeholder="Notiz (optional)" aria-label="Notiz" maxlength="200">' +
       '<span class="knoepfe"><button type="submit" class="haupt">Eintragen</button>' +
       '<button type="button" data-aktion="schliessen">Abbrechen</button></span></form>';
@@ -896,6 +905,10 @@
         break;
       }
 
+      case 'weitere':
+        oeffne({ art: 'eintragen', id: el.getAttribute('data-bezug'), weitere: true }, 'form[data-form=eintragen] input[name=name]');
+        break;
+
       case 'rueckgaengig':
         senden({ aktion: 'austragen', id: id }, el).then(render);
         break;
@@ -1032,10 +1045,17 @@
 
     if (art === 'eintragen') {
       if (!w.name) return;
-      z.name = w.name;
-      merke('localStorage', 'helferliste.name', w.name);
+      // Beim Eintragen weiterer Personen bleibt der eigene gespeicherte Name unverändert.
+      if (f.getAttribute('data-weitere') !== '1') {
+        z.name = w.name;
+        merke('localStorage', 'helferliste.name', w.name);
+      }
       senden({ aktion: 'eintragen', bezug: id, name: w.name, notiz: w.notiz }, knopf).then(function (a) {
-        if (a.ok) z.offen = null;
+        if (a.ok) {
+          z.offen = null;
+          var neu = z.daten.Eintragungen.filter(function (x) { return x.bezug === id && gleicherName(x.name, w.name); })[0];
+          if (neu) zeigeMeldung(a.meldung, false, neu.id);
+        }
         render();
       });
     } else if (art === 'name') {
