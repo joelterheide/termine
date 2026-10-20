@@ -841,7 +841,8 @@
     return '<form class="kasten" data-form="termin" data-id="' + esc(t.id || '') + '">' +
       '<h3>' + (t.id ? 'Termin bearbeiten' : 'Neuer Termin') + '</h3>' +
       '<label>Titel<input name="titel" required maxlength="120" value="' + esc(t.titel || '') + '" placeholder="z. B. Adventsmarkt"></label>' +
-      '<div class="reihe"><label>Datum<input type="date" name="datum" required value="' + esc(t.datum || '') + '"></label>' +
+      '<div class="reihe"><label>Datum<input type="date" name="datum" required value="' + esc(t.datum || '') + '">' +
+      '<span class="tipp">Mehrere Tage? Hier den ersten Tag eintragen, die weiteren Tage bei den Schichten.</span></label>' +
       '<label>Ort<input name="ort" maxlength="150" value="' + esc(t.ort || '') + '" placeholder="optional"></label></div>' +
       '<label>Info<textarea name="info" rows="3" maxlength="2000" placeholder="optional">' + esc(t.info || '') + '</textarea></label>' +
       '<div class="knoepfe"><button type="submit" class="haupt">Speichern</button>' +
@@ -856,7 +857,8 @@
       '<h3>' + (s.id ? 'Schicht ändern' : 'Schichten hinzufügen') + '</h3>' +
       '<div class="reihe"><label>Station / Aufgabe<input name="station" maxlength="80" list="' + esc(listId) + '" value="' + esc(s.station || '') + '" placeholder="z. B. Glühweinstand">' +
       '<span class="tipp">Leer lassen, wenn es nur allgemein Helfer braucht.</span></label>' +
-      '<label>Datum<input type="date" name="datum" value="' + esc(s.tag || t.datum || '') + '"></label></div>' +
+      '<label>Datum<input type="date" name="datum" value="' + esc(s.tag || t.datum || '') + '">' +
+      '<span class="tipp">Für einen weiteren Tag einfach ein anderes Datum wählen.</span></label></div>' +
       '<datalist id="' + esc(listId) + '">' + stationen.map(function (x) { return '<option value="' + esc(x) + '">'; }).join('') + '</datalist>' +
       '<div class="reihe"><label>' + (s.id ? 'Zeit' : 'Zeiten') + '<input name="zeiten" value="' + esc(s.id ? zeitText(s).replace(/^ab /, '') : '') + '" placeholder="' + (s.id ? '14:00–16:00' : '14:00–16:00, 16:00–18:00') + '">' +
       '<span class="tipp">' + (s.id ? 'Leer = ohne feste Zeit.' : 'Mehrere Zeiten mit Komma trennen – je Zeit entsteht eine Schicht. Leer = ohne feste Zeit.') + '</span></label>' +
