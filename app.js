@@ -415,11 +415,21 @@
     if (!kommend.length) h += '<p class="leer">Keine kommenden Termine.</p>';
     kommend.forEach(function (t) { h += terminHtml(t); });
 
+    // Archiv: vergangene Termine, neueste zuerst, nach Monaten gegliedert
     if (vergangen.length) {
       h += '<p class="vergangen-schalter"><button class="link" data-aktion="vergangene">' +
         (z.vergangene ? 'Vergangene Termine ausblenden' : 'Vergangene Termine anzeigen (' + vergangen.length + ')') +
         '</button></p>';
-      if (z.vergangene) vergangen.slice().reverse().forEach(function (t) { h += terminHtml(t); });
+      if (z.vergangene) {
+        h += '<h2 class="abschnitt">Vergangene Termine</h2>';
+        var monat = '';
+        vergangen.slice().reverse().forEach(function (t) {
+          var d = alsDatum(t.von);
+          var m = d ? MONAT[d.getMonth()] + ' ' + d.getFullYear() : 'ohne Datum';
+          if (m !== monat) { h += '<h3 class="monat">' + esc(m) + '</h3>'; monat = m; }
+          h += terminHtml(t);
+        });
+      }
     }
     return h;
   }
@@ -603,7 +613,7 @@
     h += zahlHtml(n, max);
     h += '<span class="z-namen">' + namenHtml(s.leute, vorbei) +
       (s.info ? '<span class="z-info">' + esc(s.info) + '</span>' : '') + '</span>';
-    h += '<span class="z-aktion">' + aktionHtml(s.id, vorbei, voll, s.leute, false);
+    h += '<span class="z-aktion">' + aktionHtml(s.id, vorbei, voll, s.leute, true);
     if (admin()) {
       h += '<span class="verw"><button class="link" data-aktion="schicht-bearbeiten" data-id="' + esc(s.id) + '" data-termin="' + esc(t.id) + '">ändern</button>' +
         '<button class="link" data-aktion="schicht-loeschen" data-id="' + esc(s.id) + '">löschen</button></span>';
@@ -690,11 +700,14 @@
         '</button></p>';
       if (z.erledigteZeigen) erledigt.forEach(function (g) { h += aufgabeHtml(g); });
     }
-    if (abgelaufen.length && admin()) {
+    if (abgelaufen.length) {
       h += '<p class="vergangen-schalter"><button class="link" data-aktion="vergangene">' +
         (z.vergangene ? 'Abgelaufene Aufgaben ausblenden' : 'Abgelaufene Aufgaben anzeigen (' + abgelaufen.length + ')') +
         '</button></p>';
-      if (z.vergangene) abgelaufen.forEach(function (g) { h += aufgabeHtml(g); });
+      if (z.vergangene) {
+        h += '<h2 class="abschnitt">Abgelaufene Aufgaben</h2>';
+        abgelaufen.slice().reverse().forEach(function (g) { h += aufgabeHtml(g); });
+      }
     }
     return h;
   }
