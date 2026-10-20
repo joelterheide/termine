@@ -419,8 +419,10 @@
         var t = finde(z.sicht.termine, p.termin_id);
         var o = finde(p.optionen, p.ergebnis);
         if (!t || istVorbei(t)) { if (admin()) h += '<p class="ergebnis leise">„' + esc(p.titel) + '“: Abstimmung abgeschlossen' + loeschen + '</p>'; return; }
+        var mitListe = t.schichten.some(function (s) { return s.station === 'Teilnehmer'; });
         h += '<p class="ergebnis">„' + esc(p.titel) + '“ ist per Abstimmung auf <strong>' + esc(datumLang(t.datum)) + '</strong> festgelegt' +
           (o ? ' (' + o.stimmen.length + (o.stimmen.length === 1 ? ' Stimme' : ' Stimmen') + ')' : '') +
+          (mitListe ? '. Wer dafür gestimmt hat, ist als Teilnehmer eingetragen' : '') +
           ' · <a href="#t-' + esc(t.id) + '">zum Termin</a>' + loeschen + '</p>';
       } else if (admin()) {
         h += '<p class="ergebnis leise">„' + esc(p.titel) + '“: Abstimmung ohne Stimmen beendet' + loeschen + '</p>';
@@ -440,7 +442,8 @@
       h += '<h2>' + esc(p.titel) + '</h2>';
       if (p.ort) h += '<div class="t-ort">' + esc(p.ort) + '</div>';
       if (p.info) h += '<p class="info">' + mitLinks(p.info) + '</p>';
-      h += '<p class="leise klein">Wähle alle Termine, die dir passen. Danach wird automatisch der mit den meisten Stimmen festgelegt.</p>';
+      h += '<p class="leise klein">Wähle alle Termine, die dir passen. Danach wird automatisch der mit den meisten Stimmen festgelegt, ' +
+        'und wer dafür gestimmt hat, ist dort als Teilnehmer eingetragen.</p>';
     }
     h += '<div class="schichten">';
     p.optionen.forEach(function (o) { h += optionZeile(p, o); });
@@ -502,7 +505,8 @@
     }
     h += '<button type="button" class="link" data-aktion="option-zeile">+ weiteres Datum</button></fieldset>' +
       '<p class="tipp">Am Tag nach „Abstimmen bis“ wird automatisch der Termin mit den meisten Stimmen angelegt, ' +
-      'bei Gleichstand der frühere. Mit „festlegen“ kannst du auch vorher selbst entscheiden.</p>' +
+      'bei Gleichstand der frühere. Wer dafür gestimmt hat, steht dort gleich in der Liste „Teilnehmer“. ' +
+      'Mit „festlegen“ kannst du auch vorher selbst entscheiden.</p>' +
       '<div class="knoepfe"><button type="submit" class="haupt">Speichern</button>' +
       '<button type="button" data-aktion="schliessen">Abbrechen</button></div></form>';
     return h;

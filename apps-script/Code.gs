@@ -403,6 +403,20 @@ function festlegen_(ctx, p, optionId) {
   let info = gewinner.von ? 'Beginn: ' + gewinner.von + ' Uhr' : '';
   if (p.info) info += (info ? '\n' : '') + p.info;
   const t = neu_(ctx, 'Termine', { titel: p.titel, datum: gewinner.datum, ort: p.ort, info: info });
+
+  // Alle, denen der Termin gepasst hat, stehen direkt in der Liste „Teilnehmer“.
+  // Andere können sich dazu eintragen, und jeder kann wie gewohnt wieder absagen.
+  const liste = neu_(ctx, 'Schichten', {
+    termin_id: t.id, station: 'Teilnehmer', datum: '', von: gewinner.von, bis: '', anzahl: '0', info: ''
+  });
+  const fuer = beschreibung_(ctx.db, liste.id);
+  stimmenVon_(ctx.db, gewinner.id)
+    .slice()
+    .sort(function (a, b) { return String(a.zeitpunkt) < String(b.zeitpunkt) ? -1 : 1; })
+    .forEach(function (v) {
+      neu_(ctx, 'Eintragungen', { bezug: liste.id, name: v.name, notiz: '', fuer: fuer, zeitpunkt: v.zeitpunkt || new Date().toISOString() });
+    });
+
   aendere_(ctx, 'Abstimmungen', p, { status: 'festgelegt', ergebnis: gewinner.id, termin_id: t.id });
   return t;
 }
