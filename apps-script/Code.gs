@@ -33,7 +33,7 @@ const ZEITZONE = 'Europe/Berlin';
 const TABELLEN = {
   Termine: ['id', 'titel', 'datum', 'ort', 'info'],
   Schichten: ['id', 'termin_id', 'station', 'datum', 'von', 'bis', 'anzahl', 'info'],
-  Aufgaben: ['id', 'titel', 'info', 'frist', 'anzahl'],
+  Aufgaben: ['id', 'titel', 'info', 'frist', 'anzahl', 'eltern_id', 'erledigt', 'erledigt_von'],
   Eintragungen: ['id', 'bezug', 'name', 'notiz', 'fuer', 'zeitpunkt'],
   Abstimmungen: ['id', 'titel', 'ort', 'info', 'frist', 'status', 'ergebnis', 'termin_id'],
   Optionen: ['id', 'abstimmung_id', 'datum', 'von'],
@@ -47,14 +47,14 @@ const ID_PRAEFIX = {
 
 const SPALTENTYP = {
   datum: 'datum', frist: 'datum', von: 'zeit', bis: 'zeit',
-  anzahl: 'zahl', zeitpunkt: 'zeitpunkt'
+  anzahl: 'zahl', zeitpunkt: 'zeitpunkt', erledigt: 'datum'
 };
 
 const VERWALTUNG = {
   anmelden: true,
   termin_speichern: true, termin_loeschen: true, termin_kopieren: true,
   schicht_speichern: true, schicht_loeschen: true,
-  aufgabe_speichern: true, aufgabe_loeschen: true,
+  aufgabe_speichern: true, aufgabe_loeschen: true, unteraufgaben_hinzufuegen: true,
   abstimmung_speichern: true, abstimmung_loeschen: true,
   abstimmung_festlegen: true, option_loeschen: true
 };
@@ -113,6 +113,7 @@ const AKTIONEN = {
     const bezug = String(a.bezug || '');
     const ziel = finde_(ctx.db.Schichten, bezug) || finde_(ctx.db.Aufgaben, bezug);
     if (!ziel) throw fehler_('Diesen Eintrag gibt es nicht mehr. Bitte Seite neu laden.');
+    if (ziel.erledigt) throw fehler_('Diese Aufgabe ist schon erledigt.');
 
     const liste = ctx.db.Eintragungen.filter(function (e) { return e.bezug === bezug; });
     if (liste.some(function (e) { return gleicherName_(e.name, name); })) {
@@ -247,22 +248,55 @@ const AKTIONEN = {
     if (g.id) {
       const alt = finde_(ctx.db.Aufgaben, g.id);
       if (!alt) throw fehler_('Aufgabe nicht gefunden.');
+      if (alt.eltern_id) daten.frist = ''; // Unteraufgaben haben keine eigene Frist
       aendere_(ctx, 'Aufgaben', alt, daten);
+      // Lesbare Beschreibung in „Eintragungen“ aktuell halten (auch für Unteraufgaben)
+      const betroffen = [alt.id].concat(unteraufgabenVon_(ctx.db, alt.id).map(function (u) { return u.id; }));
       ctx.db.Eintragungen.forEach(function (e) {
-        if (e.bezug === alt.id) aendere_(ctx, 'Eintragungen', e, { fuer: beschreibung_(ctx.db, alt.id) });
+        if (betroffen.indexOf(e.bezug) >= 0) aendere_(ctx, 'Eintragungen', e, { fuer: beschreibung_(ctx.db, e.bezug) });
       });
       return 'Aufgabe gespeichert.';
     }
-    const neu = neu_(ctx, 'Aufgaben', daten);
+    const neu = neu_(ctx, 'Aufgaben', Object.assign({ eltern_id: '', erledigt: '', erledigt_von: '' }, daten));
     return { meldung: 'Aufgabe angelegt.', id: neu.id };
+  },
+
+  // Mehrere Unteraufgaben auf einmal: eine pro Zeile
+  unteraufgaben_hinzufuegen: function (ctx, a) {
+    const eltern = finde_(ctx.db.Aufgaben, a.eltern_id);
+    if (!eltern) throw fehler_('Aufgabe nicht gefunden.');
+    if (eltern.eltern_id) throw fehler_('Unteraufgaben können keine eigenen Unteraufgaben haben.');
+    const titel = String(a.titel == null ? '' : a.titel).split(/\r?\n/)
+      .map(function (t) { return einzeilig_(t, 120); })
+      .filter(function (t) { return t; });
+    if (!titel.length) throw fehler_('Bitte mindestens eine Unteraufgabe angeben.');
+    const anzahl = String(zahl_(a.anzahl));
+    titel.forEach(function (t) {
+      neu_(ctx, 'Aufgaben', { titel: t, info: '', frist: '', anzahl: anzahl, eltern_id: eltern.id, erledigt: '', erledigt_von: '' });
+    });
+    return titel.length === 1 ? 'Unteraufgabe angelegt.' : titel.length + ' Unteraufgaben angelegt.';
+  },
+
+  // Abhaken darf jeder (wie auf einer Liste am schwarzen Brett)
+  abhaken: function (ctx, a) {
+    const g = finde_(ctx.db.Aufgaben, a.id);
+    if (!g) throw fehler_('Diese Aufgabe gibt es nicht mehr.');
+    if (a.erledigt) {
+      aendere_(ctx, 'Aufgaben', g, { erledigt: ctx.opt.heute, erledigt_von: einzeilig_(a.name, 60).replace(/^[=+\-@]+/, '') });
+      return 'Erledigt.';
+    }
+    aendere_(ctx, 'Aufgaben', g, { erledigt: '', erledigt_von: '' });
+    return 'Wieder offen.';
   },
 
   aufgabe_loeschen: function (ctx, a) {
     const g = finde_(ctx.db.Aufgaben, a.id);
     if (!g) throw fehler_('Aufgabe nicht gefunden.');
-    eintragungenVon_(ctx.db, g.id).forEach(function (e) { loesche_(ctx, 'Eintragungen', e); });
-    loesche_(ctx, 'Aufgaben', g);
-    return 'Aufgabe gelöscht.';
+    unteraufgabenVon_(ctx.db, g.id).concat([g]).forEach(function (x) {
+      eintragungenVon_(ctx.db, x.id).forEach(function (e) { loesche_(ctx, 'Eintragungen', e); });
+      loesche_(ctx, 'Aufgaben', x);
+    });
+    return g.eltern_id ? 'Unteraufgabe gelöscht.' : 'Aufgabe gelöscht.';
   },
 
   // ---------- Abstimmungen ----------
@@ -506,6 +540,10 @@ function schichtenVon_(db, terminId) {
   return db.Schichten.filter(function (s) { return s.termin_id === terminId; });
 }
 
+function unteraufgabenVon_(db, elternId) {
+  return db.Aufgaben.filter(function (g) { return elternId && g.eltern_id === elternId; });
+}
+
 function eintragungenVon_(db, bezug) {
   return db.Eintragungen.filter(function (e) { return e.bezug === bezug; });
 }
@@ -533,7 +571,9 @@ function beschreibung_(db, bezug) {
     return teile.join(' · ');
   }
   const g = finde_(db.Aufgaben, bezug);
-  return g ? 'Aufgabe: ' + g.titel : '';
+  if (!g) return '';
+  const eltern = g.eltern_id ? finde_(db.Aufgaben, g.eltern_id) : null;
+  return 'Aufgabe: ' + (eltern ? eltern.titel + ' › ' : '') + g.titel;
 }
 
 function einzeilig_(w, max) {

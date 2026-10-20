@@ -271,6 +271,38 @@ textarea { resize: vertical; }
 }
 .trenn { color: var(--leise); }
 
+/* ---------- Unteraufgaben und Abhaken ---------- */
+
+input[type="checkbox"] {
+  width: 1.05rem;
+  height: 1.05rem;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--akzent);
+  vertical-align: -.15rem;
+  cursor: pointer;
+}
+input[type="checkbox"]:disabled { cursor: default; }
+
+.fortschritt {
+  margin-top: .5rem;
+  color: var(--leise);
+  font-size: .9375rem;
+}
+
+.zeile.unteraufgabe {
+  grid-template-columns: 1.4rem minmax(0, 13rem) 2.75rem 1fr auto;
+  grid-template-areas: "haken titel zahl namen aktion";
+}
+.z-haken { grid-area: haken; }
+.z-titel { grid-area: titel; min-width: 0; }
+.zeile.unteraufgabe.erledigt .u-titel { text-decoration: line-through; color: var(--leise); }
+.zeile.unteraufgabe.erledigt .z-namen { color: var(--leise); }
+
+.aufgabe.fertig h2 { text-decoration: line-through; color: var(--leise); }
+
+label.haken { cursor: pointer; }
+
 /* ---------- Abstimmungen ---------- */
 
 .abschnitt {
@@ -453,6 +485,12 @@ form.zeile-form input { width: auto; flex: 0 1 14rem; }
       "namen namen";
   }
   .zeile.abst { grid-template-columns: auto 1fr auto; }
+  .zeile.unteraufgabe {
+    grid-template-columns: 1.4rem auto 1fr auto;
+    grid-template-areas:
+      "haken titel titel aktion"
+      ". zahl namen namen";
+  }
   .meine li {
     grid-template-columns: 1fr auto;
   }

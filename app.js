@@ -229,7 +229,16 @@
       return (a.von || '9999').localeCompare(b.von || '9999') || String(a.titel).localeCompare(String(b.titel));
     });
 
-    var aufgaben = d.Aufgaben.map(function (g) { return Object.assign({}, g, { leute: leute[g.id] || [] }); });
+    // Aufgaben mit ihren Unteraufgaben (eltern_id). Unteraufgaben ohne vorhandene Hauptaufgabe zählen als eigene Aufgabe.
+    var alle = d.Aufgaben.map(function (g) { return Object.assign({}, g, { leute: leute[g.id] || [] }); });
+    var nachId = {};
+    alle.forEach(function (g) { nachId[g.id] = g; });
+    var aufgaben = alle.filter(function (g) { return !g.eltern_id || !nachId[g.eltern_id] || g.eltern_id === g.id; });
+    aufgaben.forEach(function (g) {
+      g.unter = alle.filter(function (u) { return u.eltern_id === g.id && u !== g; });
+      g.erledigtZahl = g.unter.filter(function (u) { return u.erledigt; }).length;
+      g.fertig = g.unter.length ? g.erledigtZahl === g.unter.length : !!g.erledigt;
+    });
     aufgaben.sort(function (a, b) {
       if (a.frist && b.frist) return a.frist.localeCompare(b.frist);
       return a.frist ? -1 : b.frist ? 1 : 0;
@@ -255,7 +264,11 @@
   function istAbgelaufen(aufgabe) { return aufgabe.frist && aufgabe.frist < heute(); }
 
   function kommendeTermine() { return z.sicht.termine.filter(function (t) { return !istVorbei(t); }); }
-  function offeneAufgaben() { return z.sicht.aufgaben.filter(function (g) { return !istAbgelaufen(g); }); }
+  function offeneAufgaben() { return z.sicht.aufgaben.filter(function (g) { return !istAbgelaufen(g) && !g.fertig; }); }
+  function erledigteAufgaben() { return z.sicht.aufgaben.filter(function (g) { return !istAbgelaufen(g) && g.fertig; }); }
+  function erledigtText(x) {
+    return 'am ' + datumKurz(x.erledigt) + (x.erledigt_von ? ' von ' + x.erledigt_von : '');
+  }
 
   function meineEintraege() {
     var h = heute();
@@ -269,9 +282,12 @@
       });
     });
     z.sicht.aufgaben.forEach(function (g) {
-      if (istAbgelaufen(g)) return;
-      g.leute.forEach(function (e) {
-        if (ich(e.name)) liste.push({ e: e, aufgabe: g, sortierung: '~' + (g.frist || '9999') });
+      if (istAbgelaufen(g) || g.fertig) return;
+      [g].concat(g.unter).forEach(function (x) {
+        if (x.erledigt) return;
+        x.leute.forEach(function (e) {
+          if (ich(e.name)) liste.push({ e: e, aufgabe: g, unter: x === g ? null : x, sortierung: '~' + (g.frist || '9999') });
+        });
       });
     });
     // Termine zuerst (nach Datum), dann Aufgaben – bewusst ohne localeCompare, das „~“ vor Ziffern sortiert
@@ -660,12 +676,20 @@
 
   function aufgabenHtml() {
     var liste = offeneAufgaben();
+    var erledigt = erledigteAufgaben();
     var abgelaufen = z.sicht.aufgaben.filter(istAbgelaufen);
     var h = alsHtml() + '<div class="leiste"><span class="leise">Aufgaben ohne festen Termin</span>' +
       (admin() ? '<button data-aktion="aufgabe-neu">+ Neue Aufgabe</button>' : '') + '</div>';
     if (istOffen('aufgabe', '')) h += aufgabeFormular(null);
     if (!liste.length) h += '<p class="leer">Gerade keine offenen Aufgaben.</p>';
     liste.forEach(function (g) { h += aufgabeHtml(g); });
+    if (z.springeZu && erledigt.some(function (g) { return 'a-' + g.id === z.springeZu; })) z.erledigteZeigen = true;
+    if (erledigt.length) {
+      h += '<p class="vergangen-schalter"><button class="link" data-aktion="erledigte">' +
+        (z.erledigteZeigen ? 'Erledigte Aufgaben ausblenden' : 'Erledigte Aufgaben anzeigen (' + erledigt.length + ')') +
+        '</button></p>';
+      if (z.erledigteZeigen) erledigt.forEach(function (g) { h += aufgabeHtml(g); });
+    }
     if (abgelaufen.length && admin()) {
       h += '<p class="vergangen-schalter"><button class="link" data-aktion="vergangene">' +
         (z.vergangene ? 'Abgelaufene Aufgaben ausblenden' : 'Abgelaufene Aufgaben anzeigen (' + abgelaufen.length + ')') +
@@ -677,31 +701,83 @@
 
   function aufgabeHtml(g) {
     var vorbei = istAbgelaufen(g);
-    var h = '<section class="aufgabe' + (vorbei ? ' vorbei' : '') + '" id="a-' + esc(g.id) + '">';
+    var h = '<section class="aufgabe' + (vorbei ? ' vorbei' : '') + (g.fertig ? ' fertig' : '') + '" id="a-' + esc(g.id) + '">';
     if (istOffen('aufgabe', g.id)) return h + aufgabeFormular(g) + '</section>';
 
     h += '<h2>' + esc(g.titel) + '</h2>';
     if (g.frist) {
-      var rel = vorbei ? '' : relativ(g.frist);
+      var rel = vorbei || g.fertig ? '' : relativ(g.frist);
       h += '<div class="t-datum">bis ' + esc(datumLang(g.frist)) + (rel ? ' · ' + rel : '') + '</div>';
     }
     if (g.info) h += '<p class="info">' + mitLinks(g.info) + '</p>';
-
-    var max = zahl(g.anzahl);
-    var n = g.leute.length;
-    var voll = max > 0 && n >= max;
-    h += '<div class="schichten"><div class="zeile ohne-zeit' + (voll ? ' ist-voll' : '') + '">' +
-      zahlHtml(n, max) +
-      '<span class="z-namen">' + namenHtml(g.leute, vorbei) + '</span>' +
-      '<span class="z-aktion">' + aktionHtml(g.id, vorbei, voll, g.leute, true) + '</span></div>';
-    if (istOffen('eintragen', g.id) && !vorbei && !voll) h += eintragFormular(g.id);
-    h += '</div>';
-
-    if (admin()) {
-      h += '<div class="t-links"><button class="link" data-aktion="aufgabe-bearbeiten" data-id="' + esc(g.id) + '">Bearbeiten</button>' +
-        '<span class="trenn"> · </span><button class="link" data-aktion="aufgabe-loeschen" data-id="' + esc(g.id) + '">Löschen</button></div>';
+    if (g.unter.length) {
+      h += '<div class="fortschritt">' + g.erledigtZahl + ' von ' + g.unter.length + ' erledigt</div>';
     }
+
+    h += '<div class="schichten">';
+    // Eigene Zeile der Hauptaufgabe: ohne Unteraufgaben immer, mit nur, falls dort schon jemand steht
+    if (!g.unter.length || g.leute.length) {
+      var max = zahl(g.anzahl);
+      var n = g.leute.length;
+      var voll = max > 0 && n >= max;
+      var zu = vorbei || !!g.erledigt;
+      h += '<div class="zeile ohne-zeit' + (voll ? ' ist-voll' : '') + '">' +
+        zahlHtml(n, max) +
+        '<span class="z-namen">' + namenHtml(g.leute, zu) + '</span>' +
+        '<span class="z-aktion">' + (g.erledigt && !vorbei ? '<span class="leise">erledigt</span>' : aktionHtml(g.id, vorbei, voll, g.leute, true)) + '</span></div>';
+      if (istOffen('eintragen', g.id) && !zu && !voll) h += eintragFormular(g.id);
+    }
+    g.unter.forEach(function (u) { h += unterZeile(u, vorbei); });
+    h += '</div>';
+    if (istOffen('unter', g.id)) h += unterFormular(g);
+
+    var links = [];
+    if (!g.unter.length && !vorbei) {
+      links.push('<label class="haken"><input type="checkbox" data-aktion="abhaken" data-id="' + esc(g.id) + '"' + (g.erledigt ? ' checked' : '') + '> erledigt</label>' +
+        (g.erledigt ? ' <span class="leise">' + esc(erledigtText(g)) + '</span>' : ''));
+    }
+    if (admin()) {
+      links.push('<button class="link" data-aktion="unter-neu" data-id="' + esc(g.id) + '">+ Unteraufgaben</button>');
+      links.push('<button class="link" data-aktion="aufgabe-bearbeiten" data-id="' + esc(g.id) + '">Bearbeiten</button>');
+      links.push('<button class="link" data-aktion="aufgabe-loeschen" data-id="' + esc(g.id) + '">Löschen</button>');
+    }
+    if (links.length) h += '<div class="t-links">' + links.join('<span class="trenn"> · </span>') + '</div>';
     return h + '</section>';
+  }
+
+  function unterZeile(u, vorbei) {
+    if (istOffen('aufgabe', u.id)) return aufgabeFormular(u);
+    var max = zahl(u.anzahl);
+    var n = u.leute.length;
+    var voll = max > 0 && n >= max;
+    var fertig = !!u.erledigt;
+    var h = '<div class="zeile unteraufgabe' + (fertig ? ' erledigt' : '') + (voll ? ' ist-voll' : '') + '">';
+    h += '<span class="z-haken"><input type="checkbox" data-aktion="abhaken" data-id="' + esc(u.id) + '"' +
+      (fertig ? ' checked' : '') + (vorbei ? ' disabled' : '') + ' aria-label="' + esc(u.titel) + ' erledigt"></span>';
+    h += '<span class="z-titel"><span class="u-titel">' + esc(u.titel) + '</span>' +
+      (u.info ? '<span class="z-info">' + esc(u.info) + '</span>' : '') +
+      (fertig ? '<span class="z-info">erledigt ' + esc(erledigtText(u)) + '</span>' : '') + '</span>';
+    h += zahlHtml(n, max);
+    h += '<span class="z-namen">' + namenHtml(u.leute, vorbei || fertig) + '</span>';
+    h += '<span class="z-aktion">' + (fertig ? '' : aktionHtml(u.id, vorbei, voll, u.leute, false));
+    if (admin()) {
+      h += '<span class="verw"><button class="link" data-aktion="aufgabe-bearbeiten" data-id="' + esc(u.id) + '">ändern</button>' +
+        '<button class="link" data-aktion="unter-loeschen" data-id="' + esc(u.id) + '">löschen</button></span>';
+    }
+    h += '</span></div>';
+    if (istOffen('eintragen', u.id) && !vorbei && !voll && !fertig) h += eintragFormular(u.id);
+    return h;
+  }
+
+  function unterFormular(g) {
+    return '<form class="kasten" data-form="unter" data-id="' + esc(g.id) + '">' +
+      '<h3>Unteraufgaben hinzufügen</h3>' +
+      '<label>Unteraufgaben<textarea name="titel" rows="3" maxlength="3000" placeholder="Baum aussuchen&#10;Anhänger organisieren"></textarea>' +
+      '<span class="tipp">Eine Unteraufgabe pro Zeile.</span></label>' +
+      '<div class="reihe"><label>Helfer je Unteraufgabe<input type="number" name="anzahl" min="0" max="999" inputmode="numeric" value="1">' +
+      '<span class="tipp">0 = beliebig viele</span></label></div>' +
+      '<div class="knoepfe"><button type="submit" class="haupt">Hinzufügen</button>' +
+      '<button type="button" data-aktion="schliessen">Fertig</button></div></form>';
   }
 
   // ---------- Meine Einträge ----------
@@ -727,7 +803,8 @@
           (m.schicht.station ? ' · ' + esc(m.schicht.station) : '');
       } else {
         wann = m.aufgabe.frist ? 'bis ' + datumKurz(m.aufgabe.frist) : 'Aufgabe';
-        was = '<a href="#a-' + esc(m.aufgabe.id) + '">' + esc(m.aufgabe.titel) + '</a>';
+        was = '<a href="#a-' + esc(m.aufgabe.id) + '">' + esc(m.aufgabe.titel) + '</a>' +
+          (m.unter ? ' › ' + esc(m.unter.titel) : '');
       }
       if (m.e.notiz) was += ' <span class="notiz">(' + esc(m.e.notiz) + ')</span>';
       h += '<li><span class="m-wann">' + esc(wann) + '</span><span class="m-was">' + was + '</span>' +
@@ -784,11 +861,15 @@
 
   function aufgabeFormular(g) {
     g = g || {};
+    var unter = !!g.eltern_id;
     return '<form class="kasten" data-form="aufgabe" data-id="' + esc(g.id || '') + '">' +
-      '<h3>' + (g.id ? 'Aufgabe bearbeiten' : 'Neue Aufgabe') + '</h3>' +
+      '<h3>' + (unter ? 'Unteraufgabe bearbeiten' : g.id ? 'Aufgabe bearbeiten' : 'Neue Aufgabe') + '</h3>' +
       '<label>Titel<input name="titel" required maxlength="120" value="' + esc(g.titel || '') + '" placeholder="z. B. Kuchen backen"></label>' +
-      '<label>Info<textarea name="info" rows="2" maxlength="2000" placeholder="optional">' + esc(g.info || '') + '</textarea></label>' +
-      '<div class="reihe"><label>Erledigen bis<input type="date" name="frist" value="' + esc(g.frist || '') + '"><span class="tipp">optional</span></label>' +
+      (unter
+        ? '<label>Hinweis<input name="info" maxlength="300" value="' + esc(g.info || '') + '" placeholder="optional"></label>'
+        : '<label>Info<textarea name="info" rows="2" maxlength="2000" placeholder="optional">' + esc(g.info || '') + '</textarea></label>') +
+      '<div class="reihe">' +
+      (unter ? '' : '<label>Erledigen bis<input type="date" name="frist" value="' + esc(g.frist || '') + '"><span class="tipp">optional</span></label>') +
       '<label>Wie viele Helfer?<input type="number" name="anzahl" min="0" max="999" inputmode="numeric" value="' + esc(g.id ? zahl(g.anzahl) : 1) + '">' +
       '<span class="tipp">0 = beliebig viele</span></label></div>' +
       '<div class="knoepfe"><button type="submit" class="haupt">Speichern</button>' +
@@ -842,17 +923,18 @@
   // =====================================================================
 
   var meldungTimer = null;
-  // rueckgaengig: ID einer Eintragung, die man direkt wieder löschen kann
+  // rueckgaengig: ID einer Eintragung (wird wieder gelöscht) oder { aktion, id } für einen anderen Knopf
   function zeigeMeldung(text, istFehler, rueckgaengig) {
     var el = document.getElementById('meldung');
     if (!text) { el.hidden = true; return; }
     el.textContent = text;
     if (rueckgaengig) {
+      if (typeof rueckgaengig === 'string') rueckgaengig = { aktion: 'rueckgaengig', id: rueckgaengig };
       var b = document.createElement('button');
       b.className = 'link';
       b.textContent = 'Rückgängig';
-      b.setAttribute('data-aktion', 'rueckgaengig');
-      b.setAttribute('data-id', rueckgaengig);
+      b.setAttribute('data-aktion', rueckgaengig.aktion);
+      b.setAttribute('data-id', rueckgaengig.id);
       el.appendChild(b);
     }
     el.className = 'meldung' + (istFehler ? ' fehler' : '');
@@ -896,7 +978,14 @@
     }
     z.daten = d;
     z.sicht = aufbereiten(d);
+    document.body.setAttribute('data-ausstehend', String(ausstehend.length));
   }
+
+  // „Rückgängig“ soll immer nur die zuletzt angeklickte Aktion betreffen, auch wenn
+  // Antworten auf frühere Klicks später eintreffen.
+  var letzteAktion = 0;
+  function neueAktion() { return ++letzteAktion; }
+  function istLetzte(nr) { return nr === letzteAktion; }
 
   function gemerkterStand() {
     if (backend.demo) return;
@@ -910,19 +999,25 @@
   function istTmp(id) { return /^tmp-/.test(id || ''); }
 
   // Änderung sofort anzeigen und im Hintergrund senden
+  // a.letzte: ob diese Aktion noch die zuletzt angeklickte ist (nur dann Erfolgsmeldung)
   function sofort(anwenden, anfrage) {
+    var nr = neueAktion();
     var eintrag = { anwenden: anwenden };
     ausstehend.push(eintrag);
     zeigeStand();
     render();
-    return senden(anfrage, null, eintrag);
+    return senden(anfrage, null, eintrag).then(function (a) {
+      a.letzte = istLetzte(nr);
+      if (a.ok && a.letzte) zeigeMeldung(a.meldung);
+      return a;
+    });
   }
 
   function eintragenSofort(bezug, name, notiz) {
     sofort(function (d) {
       d.Eintragungen.push({ id: tmpId(), bezug: bezug, name: name, notiz: notiz || '', fuer: '', zeitpunkt: new Date().toISOString() });
     }, { aktion: 'eintragen', bezug: bezug, name: name, notiz: notiz || '' }).then(function (a) {
-      if (a.ok) {
+      if (a.ok && a.letzte) {
         var neu = z.daten.Eintragungen.filter(function (x) { return x.bezug === bezug && gleicherName(x.name, name); })[0];
         if (neu) zeigeMeldung(a.meldung, false, neu.id);
       }
@@ -965,7 +1060,9 @@
         a.fehler = 'Dafür muss zuerst die neue Code.gs in Apps Script eingefügt und neu bereitgestellt werden (siehe Anleitung).';
       }
       if (!a.ok && anfrage.passwort && /Falsches Passwort|gesperrt/.test(a.fehler || '')) abmelden();
-      zeigeMeldung(a.ok ? a.meldung : a.fehler, !a.ok);
+      // Fehler immer zeigen; Erfolg bei sofort angezeigten Änderungen entscheidet sofort()
+      if (!a.ok) zeigeMeldung(a.fehler, true);
+      else if (!eintrag) zeigeMeldung(a.meldung);
       return a;
     });
   }
@@ -1321,10 +1418,49 @@
 
       case 'aufgabe-loeschen': {
         var g = finde(z.sicht.aufgaben, id);
-        if (!g || !window.confirm('Aufgabe „' + g.titel + '“ löschen?')) return;
+        if (!g) return;
+        var gfrage = 'Aufgabe „' + g.titel + '“ löschen?';
+        if (g.unter.length) gfrage += '\nAuch ' + (g.unter.length === 1 ? 'die Unteraufgabe wird' : 'die ' + g.unter.length + ' Unteraufgaben werden') + ' gelöscht.';
+        if (!window.confirm(gfrage)) return;
         verwalten({ aktion: 'aufgabe_loeschen', id: id }, el).then(render);
         break;
       }
+
+      case 'unter-neu':
+        oeffne({ art: 'unter', id: id }, 'form[data-form=unter] textarea');
+        break;
+
+      case 'unter-loeschen': {
+        var ul = finde(z.daten.Aufgaben, id);
+        if (!ul) return;
+        var uAnzahl = z.daten.Eintragungen.filter(function (x) { return x.bezug === id; }).length;
+        var ufrage = 'Unteraufgabe „' + ul.titel + '“ löschen?';
+        if (uAnzahl) ufrage += '\n' + uAnzahl + (uAnzahl === 1 ? ' Eintragung wird' : ' Eintragungen werden') + ' mitgelöscht.';
+        if (!window.confirm(ufrage)) return;
+        verwalten({ aktion: 'aufgabe_loeschen', id: id }, el).then(render);
+        break;
+      }
+
+      case 'abhaken': {
+        var ga = finde(z.daten.Aufgaben, id);
+        if (!ga) return;
+        var nunErledigt = !ga.erledigt;
+        var wer = z.name;
+        zeigeMeldung('');
+        sofort(function (d) {
+          var x = finde(d.Aufgaben, id);
+          if (x) { x.erledigt = nunErledigt ? heute() : ''; x.erledigt_von = nunErledigt ? wer : ''; }
+        }, { aktion: 'abhaken', id: id, erledigt: nunErledigt, name: wer }).then(function (a) {
+          if (a.ok && nunErledigt && a.letzte) zeigeMeldung(a.meldung, false, { aktion: 'abhaken', id: id });
+          render();
+        });
+        break;
+      }
+
+      case 'erledigte':
+        z.erledigteZeigen = !z.erledigteZeigen;
+        render();
+        break;
     }
   });
 
@@ -1420,12 +1556,22 @@
       });
     } else if (art === 'aufgabe') {
       w.id = id;
+      var bisher = id ? finde(z.daten.Aufgaben, id) : null;
       verwalten({ aktion: 'aufgabe_speichern', aufgabe: w }, knopf).then(function (a) {
         if (a.ok) {
           z.offen = null;
-          z.springeZu = 'a-' + (id || a.id);
+          z.springeZu = 'a-' + (bisher && bisher.eltern_id ? bisher.eltern_id : id || a.id);
         }
         render();
+      });
+    } else if (art === 'unter') {
+      verwalten({ aktion: 'unteraufgaben_hinzufuegen', eltern_id: id, titel: w.titel, anzahl: w.anzahl }, knopf).then(function (a) {
+        if (a.ok) f.querySelector('textarea[name=titel]').value = ''; // offen lassen für weitere
+        render();
+        if (a.ok) {
+          var feld = document.querySelector('form[data-form=unter] textarea');
+          if (feld) feld.focus();
+        }
       });
     }
   });
@@ -1518,7 +1664,10 @@
       Aufgaben: [
         { id: 'a1', titel: 'Plakate für den Adventsmarkt aufhängen', info: 'Plakate liegen im Gemeindebüro.', frist: plusTage(markt, -14), anzahl: '3' },
         { id: 'a2', titel: 'Kuchen für den Adventsmarkt backen', info: 'Bitte Freitagabend oder Samstag bis 13 Uhr im Gemeindehaus abgeben. Gern mit Zettel, was drin ist.', frist: plusTage(markt, -1), anzahl: '10' },
-        { id: 'a3', titel: 'Weihnachtsbaum für die Kirche besorgen', info: 'Wer hat einen Anhänger?', frist: plusTage(sonntag, 14), anzahl: '2' },
+        { id: 'a3', titel: 'Weihnachtsbaum für die Kirche besorgen', info: '', frist: plusTage(sonntag, 14), anzahl: '0' },
+        { id: 'a5', titel: 'Baum in der Gärtnerei aussuchen', info: '', frist: '', anzahl: '2', eltern_id: 'a3' },
+        { id: 'a6', titel: 'Anhänger organisieren', info: '', frist: '', anzahl: '1', eltern_id: 'a3', erledigt: heute(), erledigt_von: 'Peter' },
+        { id: 'a7', titel: 'Baum aufstellen und schmücken', info: 'Samstag ab 10 Uhr', frist: '', anzahl: '5', eltern_id: 'a3' },
         { id: 'a4', titel: 'Gemeindebrief verteilen', info: 'Die Bezirke werden im Gemeindebüro aufgeteilt.', frist: '', anzahl: '0' }
       ],
       Eintragungen: [
@@ -1532,7 +1681,8 @@
         e('e12', 's13', 'Peter'),
         e('e13', 'a1', 'Jonas'),
         e('e14', 'a2', 'Maria', 'Apfelkuchen'), e('e15', 'a2', 'Sabine', 'Zimtschnecken'),
-        e('e16', 'a4', 'Klaus'), e('e17', 'a4', 'Ute')
+        e('e16', 'a4', 'Klaus'), e('e17', 'a4', 'Ute'),
+        e('e18', 'a5', 'Klaus'), e('e19', 'a6', 'Peter', 'mit Papas Anhänger')
       ],
       Abstimmungen: [
         { id: 'p1', titel: 'Dankeschön-Abend für alle Helfer', ort: 'Gemeindehaus', info: 'Mit Essen und Rückblick aufs Jahr.',

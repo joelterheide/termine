@@ -8,6 +8,7 @@ Eine schlichte Website, auf der man sich als Helfer für Termine und Aufgaben ei
 
 - **Termine** mit Datum, Ort und Info. Darunter Stationen (z. B. Glühweinstand, Kasse) mit eigenen Uhrzeiten, auch über mehrere Tage.
 - **Aufgaben ohne festen Termin**, z. B. Kuchen backen oder Plakate aufhängen, optional mit „erledigen bis“.
+- **Unteraufgaben:** Eine Aufgabe kann in Teile aufgeteilt werden, z. B. „Weihnachtsbaum besorgen“ in „Baum aussuchen“, „Anhänger organisieren“ und „Aufstellen“. Für jeden Teil trägt man sich einzeln ein und hakt ihn ab, wenn er erledigt ist. Bei der Aufgabe steht dann „2 von 3 erledigt“. Ist alles erledigt, wandert die Aufgabe nach unten unter „Erledigte Aufgaben“. Aufgaben ohne Unteraufgaben hakt man direkt ab. In der Verwaltung legt man über „+ Unteraufgaben“ mehrere auf einmal an, eine pro Zeile.
 - **Eintragen** mit Namen und optionaler Notiz („bringe Waffeleisen mit“), **absagen** über das × neben dem Namen.
 - **Ein Klick:** Nach dem ersten Eintragen merkt sich der Browser den Namen. Danach trägt „Eintragen“ sofort ein, mit „Rückgängig“ für Fehlklicks. Den Namen kann man oben über „ändern“ wechseln.
 - **Weitere Personen eintragen:** Mit „+ weitere Person“ unter dem Knopf trägt man z. B. Familienmitglieder ein. Das geht auch, wenn man selbst nicht eingetragen ist, und der eigene gespeicherte Name bleibt dabei unverändert.
