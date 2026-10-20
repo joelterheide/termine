@@ -237,7 +237,9 @@
     aufgaben.forEach(function (g) {
       g.unter = alle.filter(function (u) { return u.eltern_id === g.id && u !== g; });
       g.erledigtZahl = g.unter.filter(function (u) { return u.erledigt; }).length;
-      g.fertig = g.unter.length ? g.erledigtZahl === g.unter.length : !!g.erledigt;
+      // Die ganze Aufgabe ist erst erledigt, wenn sie selbst abgehakt ist –
+      // abgehakte Unteraufgaben zählen nur als Fortschritt.
+      g.fertig = !!g.erledigt;
     });
     aufgaben.sort(function (a, b) {
       if (a.frist && b.frist) return a.frist.localeCompare(b.frist);
@@ -724,7 +726,8 @@
     }
     if (g.info) h += '<p class="info">' + mitLinks(g.info) + '</p>';
     if (g.unter.length) {
-      h += '<div class="fortschritt">' + g.erledigtZahl + ' von ' + g.unter.length + ' erledigt</div>';
+      h += '<div class="fortschritt">' + g.erledigtZahl + ' von ' + g.unter.length +
+        (g.unter.length === 1 ? ' Unteraufgabe' : ' Unteraufgaben') + ' erledigt</div>';
     }
 
     h += '<div class="schichten">';
@@ -745,8 +748,9 @@
     if (istOffen('unter', g.id)) h += unterFormular(g);
 
     var links = [];
-    if (!g.unter.length && !vorbei) {
-      links.push('<label class="haken"><input type="checkbox" data-aktion="abhaken" data-id="' + esc(g.id) + '"' + (g.erledigt ? ' checked' : '') + '> erledigt</label>' +
+    if (!vorbei) {
+      links.push('<label class="haken"><input type="checkbox" data-aktion="abhaken" data-id="' + esc(g.id) + '"' + (g.erledigt ? ' checked' : '') + '> ' +
+        (g.unter.length ? 'Ganze Aufgabe erledigt' : 'erledigt') + '</label>' +
         (g.erledigt ? ' <span class="leise">' + esc(erledigtText(g)) + '</span>' : ''));
     }
     if (admin()) {

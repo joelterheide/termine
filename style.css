@@ -302,6 +302,7 @@ input[type="checkbox"]:disabled { cursor: default; }
 .aufgabe.fertig h2 { text-decoration: line-through; color: var(--leise); }
 
 label.haken { cursor: pointer; }
+label.haken input { margin-right: .4rem; }
 
 /* ---------- Abstimmungen ---------- */
 
