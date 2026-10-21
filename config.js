@@ -17,9 +17,9 @@ window.HELFERLISTE = {
   // die erste Gruppe im Monat „ab“ (JJJJ-MM). Leere Liste = kein Putzdienst anzeigen.
   // Unter „monate“ lassen sich einzelne Monate abweichend festlegen.
   putzdienst: {
-    gruppen: [],            // z. B. ['Gruppe 1', 'Gruppe 2', 'Gruppe 3']
-    ab: '2026-11',
-    monate: {}              // z. B. { '2027-08': 'kein Putzdienst' }
+    gruppen: ['Stachos', 'Barrakudas', 'Erdmännchen', 'Belugas', 'Wanderfalken', 'Pinguine'],            // z. B. ['Gruppe 1', 'Gruppe 2', 'Gruppe 3']
+    ab: '2027-1',
+    monate: {'2027-08': 'kein Putzdienst'}              // z. B. { '2027-08': 'kein Putzdienst' }
   },
 
   // Link zur Anleitung (wird nur im Demo-Modus angezeigt)
