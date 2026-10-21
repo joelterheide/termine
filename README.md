@@ -10,6 +10,7 @@ Eine schlichte Website, auf der man sich als Helfer für Termine und Aufgaben ei
 - **Aufgaben ohne festen Termin**, z. B. Kuchen backen oder Plakate aufhängen, optional mit „erledigen bis“.
 - **Unteraufgaben:** Eine Aufgabe kann in Teile aufgeteilt werden, z. B. „Weihnachtsbaum besorgen“ in „Baum aussuchen“, „Anhänger organisieren“ und „Aufstellen“. Für jeden Teil trägt man sich einzeln ein und hakt ihn ab, wenn er erledigt ist. Bei der Aufgabe steht dann „2 von 3 Unteraufgaben erledigt“. Die ganze Aufgabe hakt man zum Schluss selbst ab („Ganze Aufgabe erledigt“). Erst dann wandert sie nach unten unter „Erledigte Aufgaben“. Aufgaben ohne Unteraufgaben hakt man direkt ab. In der Verwaltung legt man über „+ Unteraufgaben“ mehrere auf einmal an, eine pro Zeile.
 - **Eintragen** mit Namen und optionaler Notiz („bringe Waffeleisen mit“), **absagen** über das × neben dem Namen.
+- **Tabellenansicht:** Bei den Terminen über „Ansicht: Liste · Tabelle“ umschalten. Die Tabelle zeigt pro Termin eine Zeile mit Datum oder Zeitraum, Uhrzeit und Titel, nach Monaten gegliedert für die nächsten zwölf Monate. Die Schulferien stehen dazwischen, und bei jedem Monat steht, welche Gruppe Putzdienst hat. Die Tabelle lässt sich drucken. Direktlink: `…/termine/#tabelle`.
 - **Archiv:** Vergangene Termine bleiben mit allen Namen erhalten. Unten bei den Terminen stehen sie unter „Vergangene Termine anzeigen“, nach Monaten gegliedert und das Neueste zuerst. Abgelaufene und erledigte Aufgaben sind genauso aufklappbar.
 - **Ein Klick:** Nach dem ersten Eintragen merkt sich der Browser den Namen. Danach trägt „Eintragen“ sofort ein, mit „Rückgängig“ für Fehlklicks. Über „mit Notiz“ kann man beim Eintragen noch etwas dazuschreiben. Den Namen kann man oben über „ändern“ wechseln.
 - **Weitere Personen eintragen:** Mit „+ weitere Person“ unter dem Knopf trägt man z. B. Familienmitglieder ein. Das geht auch, wenn man selbst nicht eingetragen ist, und der eigene gespeicherte Name bleibt dabei unverändert.
@@ -56,7 +57,18 @@ Auf GitHub die Datei [`config.js`](config.js) öffnen, auf den Stift klicken und
 api: 'https://script.google.com/macros/s/……/exec',
 ```
 
-Mit **Commit changes** speichern. Nach etwa einer Minute ist die Seite verbunden und der Demo-Hinweis verschwindet. In `config.js` lassen sich auch Überschrift und Unterzeile ändern.
+Mit **Commit changes** speichern. Nach etwa einer Minute ist die Seite verbunden und der Demo-Hinweis verschwindet. In `config.js` lassen sich außerdem einstellen:
+
+- `titel`, `untertitel`: Überschrift und Unterzeile
+- `ferien`: Bundesland für die Schulferien in der Tabelle, z. B. `'BY'` oder `'NI'`. Leer bedeutet: keine Ferien anzeigen. Die Daten kommen von [openholidaysapi.org](https://www.openholidaysapi.org).
+- `putzdienst`: Gruppen, die reihum je einen Monat dran sind, z. B.
+  ```js
+  putzdienst: {
+    gruppen: ['Gruppe 1', 'Gruppe 2', 'Gruppe 3'],
+    ab: '2026-11',                         // Gruppe 1 hat im November 2026 Putzdienst
+    monate: { '2027-08': 'kein Putzdienst' } // einzelne Monate abweichend
+  },
+  ```
 
 ### 4. Termine anlegen
 

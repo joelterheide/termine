@@ -26,6 +26,7 @@
     reiter: 'termine',
     offen: null,          // gerade geöffnetes Formular
     vergangene: false,
+    ansicht: lies('localStorage', 'helferliste.ansicht') === 'tabelle' ? 'tabelle' : 'liste',
     passwort: lies('sessionStorage', 'helferliste.passwort'),
     name: lies('localStorage', 'helferliste.name'),
     ladefehler: '',
@@ -395,6 +396,7 @@
   // ---------- Termine ----------
 
   function termineHtml() {
+    if (z.ansicht === 'tabelle') return ansichtHtml() + tabelleHtml();
     var kommend = kommendeTermine();
     var vergangen = z.sicht.termine.filter(istVorbei);
     if (z.springeZu && vergangen.some(function (t) { return 't-' + t.id === z.springeZu; })) z.vergangene = true;
@@ -402,7 +404,7 @@
     var offen = kommend.some(function (t) {
       return t.schichten.some(function (s) { return s.tag >= heute() && freiePlaetze(s) > 0; });
     });
-    var h = alsHtml() + '<div class="leiste">' +
+    var h = ansichtHtml() + alsHtml() + '<div class="leiste">' +
       (offen ? '<button class="link" data-aktion="teilen-alle">Offene Plätze per WhatsApp teilen</button>' : '<span></span>') +
       (admin() ? '<span class="knoepfe"><button data-aktion="termin-neu">+ Neuer Termin</button>' +
         '<button data-aktion="abstimmung-neu">+ Abstimmung</button></span>' : '') +
@@ -432,6 +434,139 @@
           h += terminHtml(t);
         });
       }
+    }
+    return h;
+  }
+
+  // ---------- Tabellenansicht: kompakte Übersicht mit Ferien und Putzdienst ----------
+
+  function ansichtHtml() {
+    var a = z.ansicht;
+    function knopf(id, text) {
+      return '<button class="link' + (a === id ? ' aktiv' : '') + '" data-aktion="ansicht" data-id="' + id + '"' +
+        (a === id ? ' aria-pressed="true"' : ' aria-pressed="false"') + '>' + text + '</button>';
+    }
+    return '<div class="ansicht">Ansicht: ' + knopf('liste', 'Liste') + '<span class="trenn"> · </span>' + knopf('tabelle', 'Tabelle') +
+      (a === 'tabelle' ? '<span class="trenn"> · </span><button class="link" data-aktion="drucken">Drucken</button>' : '') + '</div>';
+  }
+
+  var BUNDESLAND = {
+    BW: 'Baden-Württemberg', BY: 'Bayern', BE: 'Berlin', BB: 'Brandenburg', HB: 'Bremen', HH: 'Hamburg',
+    HE: 'Hessen', MV: 'Mecklenburg-Vorpommern', NI: 'Niedersachsen', NW: 'Nordrhein-Westfalen',
+    RP: 'Rheinland-Pfalz', SL: 'Saarland', SN: 'Sachsen', ST: 'Sachsen-Anhalt', SH: 'Schleswig-Holstein', TH: 'Thüringen'
+  };
+  var ferien = { liste: [], laedt: false, geladen: false, fehler: false };
+
+  function monatPlus(jm, n) {
+    var j = +jm.slice(0, 4);
+    var m = +jm.slice(5, 7) - 1 + n;
+    j += Math.floor(m / 12);
+    m = ((m % 12) + 12) % 12;
+    return j + '-' + zz(m + 1);
+  }
+
+  // Schulferien von openholidaysapi.org (offen, ohne Schlüssel), eine Woche im Browser gemerkt
+  function ladeFerien() {
+    var land = String(KONF.ferien || '').toUpperCase();
+    if (!BUNDESLAND[land]) { ferien.geladen = true; return; }
+    var von = heute().slice(0, 7) + '-01';
+    var bis = monatPlus(heute().slice(0, 7), 15) + '-01';
+    var schluessel = 'helferliste.ferien.' + land;
+    try {
+      var c = JSON.parse(lies('localStorage', schluessel) || 'null');
+      if (c && c.von <= von && c.bis >= bis && Date.now() - c.zeit < 7 * 86400000) {
+        ferien.liste = c.liste; ferien.geladen = true; return;
+      }
+    } catch (e) { /* neu laden */ }
+    ferien.laedt = true;
+    fetch('https://openholidaysapi.org/SchoolHolidays?countryIsoCode=DE&subdivisionCode=DE-' + land +
+      '&languageIsoCode=DE&validFrom=' + von + '&validTo=' + bis)
+      .then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
+      .then(function (daten) {
+        ferien.liste = (Array.isArray(daten) ? daten : []).map(function (f) {
+          var namen = f.name || [];
+          var de = namen.filter(function (n) { return n.language === 'DE'; })[0] || namen[0] || {};
+          return { von: f.startDate, bis: f.endDate, name: de.text || 'Ferien' };
+        }).filter(function (f) { return alsDatum(f.von) && alsDatum(f.bis); });
+        ferien.laedt = false; ferien.geladen = true; ferien.fehler = false;
+        merke('localStorage', schluessel, JSON.stringify({ von: von, bis: bis, zeit: Date.now(), liste: ferien.liste }));
+        if (z.ansicht === 'tabelle') render();
+      })
+      .catch(function () {
+        ferien.laedt = false; ferien.geladen = true; ferien.fehler = true;
+        if (z.ansicht === 'tabelle') render();
+      });
+  }
+
+  // Putzdienst: Gruppen reihum je Monat ab „ab“, einzelne Monate unter „monate“ festlegbar
+  function putzdienst(jm) {
+    var p = KONF.putzdienst || {};
+    if (p.monate && p.monate[jm]) return String(p.monate[jm]);
+    var g = Array.isArray(p.gruppen) ? p.gruppen : [];
+    if (!g.length || !/^\d{4}-\d{2}$/.test(p.ab || '')) return '';
+    var abstand = (+jm.slice(0, 4) - +p.ab.slice(0, 4)) * 12 + (+jm.slice(5, 7) - +p.ab.slice(5, 7));
+    return abstand < 0 ? '' : String(g[abstand % g.length]);
+  }
+
+  function kurz(iso) { return datumKurz(iso).replace(' ', ' '); }
+  function spanne(von, bis) { return !bis || bis === von ? kurz(von) : kurz(von) + '\u00a0– ' + kurz(bis); }
+
+  // Uhrzeit für die Übersicht: aus den Schichten des ersten Tages, sonst „Beginn: …“ aus der Info
+  function terminZeit(t) {
+    var ersterTag = t.schichten.filter(function (s) { return s.tag === t.von && s.von; });
+    if (ersterTag.length) {
+      var anfang = ersterTag.map(function (s) { return s.von; }).sort()[0];
+      var enden = ersterTag.map(function (s) { return s.bis; }).filter(Boolean).sort();
+      return t.von === t.bis && enden.length ? anfang + '–' + enden[enden.length - 1] : 'ab ' + anfang;
+    }
+    var m = /Beginn:\s*(\d{1,2}:\d{2})/.exec(t.info || '');
+    return m ? 'ab ' + m[1] : '';
+  }
+
+  function tabelleHtml() {
+    if (KONF.ferien && !ferien.geladen && !ferien.laedt) ladeFerien();
+    var h0 = heute();
+    var start = h0.slice(0, 7);
+    var kommend = kommendeTermine().filter(function (t) { return t.von; });
+    var ende = monatPlus(start, 11);
+    kommend.forEach(function (t) { if (t.von.slice(0, 7) > ende) ende = t.von.slice(0, 7); });
+
+    var proMonat = {};
+    function dazu(monat, e) { (proMonat[monat] = proMonat[monat] || []).push(e); }
+    kommend.forEach(function (t) {
+      var m = t.von.slice(0, 7);
+      dazu(m < start ? start : m, { art: 'termin', sort: t.von + ' 1', t: t });
+    });
+    ferien.liste.forEach(function (f) {
+      if (f.bis < h0) return;
+      var m = f.von.slice(0, 7);
+      if (m < start) m = start;
+      if (m <= ende) dazu(m, { art: 'ferien', sort: f.von + ' 0', f: f });
+    });
+
+    var h = '<table class="uebersicht"><thead><tr><th scope="col">Datum</th><th scope="col">Uhrzeit</th><th scope="col">Termin</th></tr></thead><tbody>';
+    for (var jm = start; jm <= ende; jm = monatPlus(jm, 1)) {
+      var putz = putzdienst(jm);
+      h += '<tr class="monat-zeile"><th colspan="3" scope="colgroup">' + MONAT[+jm.slice(5, 7) - 1] + ' ' + jm.slice(0, 4) +
+        (putz ? '<span class="putz">Putzdienst: ' + esc(putz) + '</span>' : '') + '</th></tr>';
+      var liste = (proMonat[jm] || []).sort(function (a, b) { return a.sort < b.sort ? -1 : a.sort > b.sort ? 1 : 0; });
+      if (!liste.length) h += '<tr class="leer-zeile"><td colspan="3">keine Termine</td></tr>';
+      liste.forEach(function (e) {
+        if (e.art === 'ferien') {
+          h += '<tr class="ferien"><td class="u-datum">' + esc(spanne(e.f.von, e.f.bis)) + '</td><td></td><td>' + esc(e.f.name) + '</td></tr>';
+        } else {
+          h += '<tr><td class="u-datum">' + esc(spanne(e.t.von, e.t.bis)) + '</td><td class="u-zeit">' + esc(terminZeit(e.t)) + '</td>' +
+            '<td><a href="#t-' + esc(e.t.id) + '">' + esc(e.t.titel) + '</a></td></tr>';
+        }
+      });
+    }
+    h += '</tbody></table>';
+
+    var land = String(KONF.ferien || '').toUpperCase();
+    if (BUNDESLAND[land]) {
+      h += '<p class="quelle">' + (ferien.laedt ? 'Schulferien werden geladen …'
+        : ferien.fehler ? 'Die Schulferien konnten gerade nicht geladen werden.'
+          : 'Schulferien ' + BUNDESLAND[land] + ': openholidaysapi.org') + '</p>';
     }
     return h;
   }
@@ -1480,6 +1615,17 @@
         z.erledigteZeigen = !z.erledigteZeigen;
         render();
         break;
+
+      case 'ansicht':
+        z.ansicht = id === 'tabelle' ? 'tabelle' : 'liste';
+        merke('localStorage', 'helferliste.ansicht', z.ansicht === 'tabelle' ? 'tabelle' : '');
+        z.offen = null;
+        render();
+        break;
+
+      case 'drucken':
+        window.print();
+        break;
     }
   });
 
@@ -1602,9 +1748,10 @@
   function ankerLesen() {
     var h = decodeURIComponent(location.hash.replace(/^#/, ''));
     if (h === 'aufgaben' || h === 'meine' || h === 'termine') z.reiter = h;
-    else if (/^t-/.test(h)) { z.reiter = 'termine'; z.springeZu = h; }
+    else if (h === 'tabelle') { z.reiter = 'termine'; z.ansicht = 'tabelle'; }
+    else if (/^t-/.test(h)) { z.reiter = 'termine'; z.ansicht = 'liste'; z.springeZu = h; }
     else if (/^a-/.test(h)) { z.reiter = 'aufgaben'; z.springeZu = h; }
-    else if (/^p-/.test(h)) { z.reiter = 'termine'; z.springeZu = h; }
+    else if (/^p-/.test(h)) { z.reiter = 'termine'; z.ansicht = 'liste'; z.springeZu = h; }
     else if (!h) z.reiter = 'termine';
   }
 

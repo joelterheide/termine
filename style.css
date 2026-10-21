@@ -304,6 +304,67 @@ input[type="checkbox"]:disabled { cursor: default; }
 label.haken { cursor: pointer; }
 label.haken input { margin-right: .4rem; }
 
+/* ---------- Tabellenansicht ---------- */
+
+.ansicht {
+  margin: .9rem 0 0;
+  font-size: .9375rem;
+  color: var(--leise);
+}
+.ansicht button.aktiv {
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+  cursor: default;
+}
+
+.uebersicht {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: .75rem;
+  font-size: .9375rem;
+}
+.uebersicht th, .uebersicht td {
+  text-align: left;
+  vertical-align: top;
+  padding: .4rem .9rem .4rem 0;
+  border-bottom: 1px solid var(--linie);
+}
+.uebersicht td:last-child, .uebersicht th:last-child { padding-right: 0; }
+.uebersicht thead th {
+  font-size: .8125rem;
+  font-weight: 600;
+  color: var(--leise);
+}
+.uebersicht .monat-zeile th {
+  padding-top: 1.2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border-bottom-color: var(--rand);
+}
+.monat-zeile .putz {
+  margin-left: .9rem;
+  font-size: .9375rem;
+  font-weight: 400;
+  color: var(--leise);
+}
+.u-datum, .u-zeit {
+  width: 1%;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.uebersicht .ferien td {
+  background: var(--flaeche);
+  color: var(--leise);
+}
+.uebersicht .ferien td:first-child { padding-left: .4rem; }
+.uebersicht .leer-zeile td { color: var(--leise); }
+.quelle {
+  margin: .75rem 0 0;
+  font-size: .8125rem;
+  color: var(--leise);
+}
+
 /* ---------- Abstimmungen ---------- */
 
 .abschnitt {
@@ -493,6 +554,8 @@ form.zeile-form input { width: auto; flex: 0 1 14rem; }
       "namen namen";
   }
   .zeile.abst { grid-template-columns: auto 1fr auto; }
+  .u-datum { white-space: normal; }
+  .monat-zeile .putz { display: block; margin-left: 0; }
   .zeile.unteraufgabe {
     grid-template-columns: 1.4rem auto 1fr auto;
     grid-template-areas:
@@ -509,7 +572,9 @@ form.zeile-form input { width: auto; flex: 0 1 14rem; }
 
 @media print {
   .reiter, .fuss, .leiste, .z-aktion, .weg, .t-links, .verw, .vergangen-schalter,
-  .hinweis, .meldung, form { display: none !important; }
+  .hinweis, .meldung, form, .ansicht, .quelle { display: none !important; }
+  .uebersicht a { color: inherit; text-decoration: none; }
+  .uebersicht tr { break-inside: avoid; }
   .seite { max-width: none; padding: 0; }
   .termin, .aufgabe { break-inside: avoid; }
 }

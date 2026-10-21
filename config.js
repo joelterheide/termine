@@ -8,6 +8,20 @@ window.HELFERLISTE = {
   titel: 'Helferliste',
   untertitel: 'Kommende Termine und Aufgaben. Trag dich ein, wo du helfen kannst.',
 
+  // Schulferien in der Tabellenansicht: Kürzel des Bundeslands, z. B.
+  // 'BY' Bayern, 'NI' Niedersachsen, 'BW' Baden-Württemberg, 'NW' Nordrhein-Westfalen.
+  // Leer lassen ('') = keine Ferien anzeigen.
+  ferien: 'BY',
+
+  // Putzdienst in der Tabellenansicht: Die Gruppen sind reihum je einen Monat dran,
+  // die erste Gruppe im Monat „ab“ (JJJJ-MM). Leere Liste = kein Putzdienst anzeigen.
+  // Unter „monate“ lassen sich einzelne Monate abweichend festlegen.
+  putzdienst: {
+    gruppen: [],            // z. B. ['Gruppe 1', 'Gruppe 2', 'Gruppe 3']
+    ab: '2026-11',
+    monate: {}              // z. B. { '2027-08': 'kein Putzdienst' }
+  },
+
   // Link zur Anleitung (wird nur im Demo-Modus angezeigt)
   anleitung: 'https://github.com/joelterheide/termine#einrichten'
 };
