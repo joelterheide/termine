@@ -322,6 +322,54 @@
     return true;
   }
 
+  // Formular, in dem gerade getippt wird (oder null)
+  function aktivesFormular() {
+    var el = document.activeElement;
+    if (!el || !/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.type === 'checkbox') return null;
+    return el.form && el.form.getAttribute('data-form') ? el.form : null;
+  }
+
+  // Inhalt neu setzen. Das Formular, in dem gerade getippt wird, bleibt dabei als
+  // dasselbe Element an seinem Platz – nur alles drumherum wird ausgetauscht. So geht
+  // am Handy die Tastatur nicht zu und nichts Getipptes verloren, auch wenn währenddessen
+  // eine Antwort vom Server ankommt.
+  function setzeInhalt(behaelter, html) {
+    var alt = aktivesFormular();
+    if (!alt || !behaelter.contains(alt) || !ersetzeUmFormular(behaelter, html, alt)) behaelter.innerHTML = html;
+  }
+
+  function ersetzeUmFormular(behaelter, html, altForm) {
+    var neu = document.createElement('div');
+    neu.innerHTML = html;
+    var schluessel = formSchluessel(altForm);
+    var neuForm = null;
+    neu.querySelectorAll('form[data-form]').forEach(function (f) { if (formSchluessel(f) === schluessel) neuForm = f; });
+    if (!neuForm) return false; // Formular ist zu → normal neu zeichnen
+    var pfadAlt = [], pfadNeu = [], x;
+    for (x = altForm; x && x !== behaelter; x = x.parentNode) pfadAlt.unshift(x);
+    for (x = neuForm; x && x !== neu; x = x.parentNode) pfadNeu.unshift(x);
+    if (pfadAlt.length !== pfadNeu.length) return false;
+    for (var i = 0; i < pfadAlt.length; i++) if (pfadAlt[i].tagName !== pfadNeu[i].tagName) return false;
+
+    var elternAlt = behaelter, elternNeu = neu;
+    pfadAlt.forEach(function (bleibt, i) {
+      var ersatz = pfadNeu[i];
+      // Geschwister vor und nach dem Pfad-Element durch die neuen ersetzen
+      while (elternAlt.firstChild !== bleibt) elternAlt.removeChild(elternAlt.firstChild);
+      while (bleibt.nextSibling) elternAlt.removeChild(bleibt.nextSibling);
+      while (elternNeu.firstChild !== ersatz) elternAlt.insertBefore(elternNeu.firstChild, bleibt);
+      while (ersatz.nextSibling) elternAlt.appendChild(ersatz.nextSibling);
+      if (i < pfadAlt.length - 1) {
+        // Attribute der umgebenden Elemente (z. B. Klassen) übernehmen
+        Array.prototype.slice.call(bleibt.attributes).forEach(function (a) { if (!ersatz.hasAttribute(a.name)) bleibt.removeAttribute(a.name); });
+        Array.prototype.slice.call(ersatz.attributes).forEach(function (a) { bleibt.setAttribute(a.name, a.value); });
+      }
+      elternAlt = bleibt;
+      elternNeu = ersatz;
+    });
+    return true;
+  }
+
   function render() {
     var gemerkt = merkeFormulare();
     var fokus = merkeFokus();
@@ -334,17 +382,17 @@
 
     document.getElementById('hinweis').innerHTML = hinweisHtml();
     document.getElementById('reiter').innerHTML = reiterHtml();
-    document.getElementById('fuss').innerHTML = fussHtml();
+    setzeInhalt(document.getElementById('fuss'), fussHtml());
 
     var inhalt = document.getElementById('inhalt');
     if (!z.sicht) {
-      inhalt.innerHTML = z.ladefehler ? '' : '<p class="leer">Lade …</p>';
+      setzeInhalt(inhalt, z.ladefehler ? '' : '<p class="leer">Lade …</p>');
     } else if (z.reiter === 'aufgaben') {
-      inhalt.innerHTML = aufgabenHtml();
+      setzeInhalt(inhalt, aufgabenHtml());
     } else if (z.reiter === 'meine') {
-      inhalt.innerHTML = meineHtml();
+      setzeInhalt(inhalt, meineHtml());
     } else {
-      inhalt.innerHTML = termineHtml();
+      setzeInhalt(inhalt, termineHtml());
     }
 
     stelleFormulareWiederHer(gemerkt);
@@ -1051,15 +1099,20 @@
 
   function schichtFormular(t, s) {
     var stationen = einzigartig(t.schichten.map(function (x) { return x.station; }).filter(Boolean));
-    var listId = 'stationen-' + t.id;
     s = s || {};
+    // Vorhandene Stationen als einfache Links (statt Browser-Vorschlagsliste, die sich je nach Gerät anders verhält)
+    var vorhandene = stationen.length
+      ? '<span class="tipp">Vorhandene: ' + stationen.map(function (x, i) {
+        return '<span class="wahl"><button type="button" class="link" data-aktion="station-waehlen" data-wert="' + esc(x) + '">' +
+          esc(x) + '</button>' + (i < stationen.length - 1 ? ',' : '') + '</span>';
+      }).join(' ') + '</span>'
+      : '<span class="tipp">Leer lassen, wenn es nur allgemein Helfer braucht.</span>';
     return '<form class="kasten" data-form="schicht" data-id="' + esc(s.id || '') + '" data-termin="' + esc(t.id) + '">' +
       '<h3>' + (s.id ? 'Schicht ändern' : 'Schichten hinzufügen') + '</h3>' +
-      '<div class="reihe"><label>Station / Aufgabe<input name="station" maxlength="80" list="' + esc(listId) + '" value="' + esc(s.station || '') + '" placeholder="z. B. Glühweinstand">' +
-      '<span class="tipp">Leer lassen, wenn es nur allgemein Helfer braucht.</span></label>' +
+      '<div class="reihe"><label>Station / Aufgabe<input name="station" maxlength="80" autocomplete="off" value="' + esc(s.station || '') + '" placeholder="z. B. Glühweinstand">' +
+      vorhandene + '</label>' +
       '<label>Datum<input type="date" name="datum" value="' + esc(s.tag || t.datum || '') + '">' +
       '<span class="tipp">Für einen weiteren Tag einfach ein anderes Datum wählen.</span></label></div>' +
-      '<datalist id="' + esc(listId) + '">' + stationen.map(function (x) { return '<option value="' + esc(x) + '">'; }).join('') + '</datalist>' +
       '<div class="reihe"><label>' + (s.id ? 'Zeit' : 'Zeiten') + '<input name="zeiten" value="' + esc(s.id ? zeitText(s).replace(/^ab /, '') : '') + '" placeholder="' + (s.id ? '14:00–16:00' : '14:00–16:00, 16:00–18:00') + '">' +
       '<span class="tipp">' + (s.id ? 'Leer = ohne feste Zeit.' : 'Mehrere Zeiten mit Komma trennen – je Zeit entsteht eine Schicht. Leer = ohne feste Zeit.') + '</span></label>' +
       '<label>Helfer pro Schicht<input type="number" name="anzahl" min="0" max="999" inputmode="numeric" value="' + esc(s.id ? zahl(s.anzahl) : 2) + '">' +
@@ -1458,7 +1511,7 @@
     return null;
   }
 
-  document.addEventListener('click', function (ev) {
+  function klick(ev) {
     var el = ev.target.closest('[data-aktion]');
     if (!el) return;
     var aktion = el.getAttribute('data-aktion');
@@ -1717,10 +1770,16 @@
       case 'drucken':
         window.print();
         break;
-    }
-  });
 
-  document.addEventListener('submit', function (ev) {
+      case 'station-waehlen': {
+        var sf = el.closest('form');
+        if (sf) { sf.elements.station.value = el.getAttribute('data-wert'); sf.elements.station.focus(); }
+        break;
+      }
+    }
+  }
+
+  function absenden(ev) {
     var f = ev.target;
     var art = f.getAttribute('data-form');
     if (!art) return;
@@ -1786,22 +1845,23 @@
     } else if (art === 'schicht') {
       w.id = id;
       w.termin_id = f.getAttribute('data-termin');
+      var leeren = ['station', 'zeiten', 'info'];
+      if (!id) {
+        // Sofort leeren und Formular offen lassen: Die nächste Station kann man schon tippen,
+        // während Google noch antwortet.
+        leeren.forEach(function (n) { f.elements[n].value = ''; });
+        f.elements.station.focus();
+      }
       verwalten({ aktion: 'schicht_speichern', schicht: w }, knopf).then(function (a) {
-        if (a.ok) {
-          if (id) {
-            z.offen = null;
-          } else {
-            // Formular offen lassen für die nächste Station, Felder leeren
-            f.querySelector('input[name=station]').value = '';
-            f.querySelector('input[name=zeiten]').value = '';
-            f.querySelector('input[name=info]').value = '';
+        if (a.ok && id) z.offen = null;
+        if (!a.ok && !id) {
+          // Fehler: Eingaben zurückholen, falls inzwischen nichts Neues getippt wurde
+          var form = document.querySelector('form[data-form=schicht][data-termin="' + w.termin_id + '"]');
+          if (form && leeren.every(function (n) { return !form.elements[n].value; })) {
+            leeren.forEach(function (n) { form.elements[n].value = w[n] || ''; });
           }
         }
         render();
-        if (a.ok && !id) {
-          var feld = document.querySelector('form[data-form=schicht] input[name=station]');
-          if (feld) feld.focus();
-        }
       });
     } else if (art === 'kopieren') {
       verwalten({ aktion: 'termin_kopieren', id: id, datum: w.datum }, knopf).then(function (a) {
@@ -1819,16 +1879,21 @@
         render();
       });
     } else if (art === 'unter') {
+      // sofort leeren (Formular bleibt offen für weitere), bei Fehler zurückholen
+      f.elements.titel.value = '';
+      f.elements.titel.focus();
       verwalten({ aktion: 'unteraufgaben_hinzufuegen', eltern_id: id, titel: w.titel, anzahl: w.anzahl }, knopf).then(function (a) {
-        if (a.ok) f.querySelector('textarea[name=titel]').value = ''; // offen lassen für weitere
-        render();
-        if (a.ok) {
-          var feld = document.querySelector('form[data-form=unter] textarea');
-          if (feld) feld.focus();
+        if (!a.ok) {
+          var uf = document.querySelector('form[data-form=unter][data-id="' + id + '"]');
+          if (uf && !uf.elements.titel.value) uf.elements.titel.value = w.titel;
         }
+        render();
       });
     }
-  });
+  }
+
+  document.addEventListener('click', klick);
+  document.addEventListener('submit', absenden);
 
   // =====================================================================
   // Navigation über den Anker in der Adresse (#termine, #aufgaben, #meine, #t-…, #a-…)
