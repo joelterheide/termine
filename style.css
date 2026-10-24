@@ -302,6 +302,25 @@ input[type="checkbox"]:disabled { cursor: default; }
 .aufgabe.fertig h2 { text-decoration: line-through; color: var(--leise); }
 
 label.haken { cursor: pointer; }
+
+.kasten label.haken-zeile {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  align-self: center;
+  cursor: pointer;
+}
+.kasten label.haken-zeile input { margin: 0; }
+
+.kasten .warnung {
+  margin: 0 0 .9rem;
+  padding: .5rem .7rem;
+  border-left: 3px solid var(--fehler);
+  background: var(--hinter);
+  font-size: .9375rem;
+}
+
+.zeile.direkt { border-top-color: var(--rand); }
 label.haken input { margin-right: .4rem; }
 
 /* ---------- Tabellenansicht ---------- */

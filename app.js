@@ -30,6 +30,7 @@
     passwort: lies('sessionStorage', 'helferliste.passwort'),
     name: lies('localStorage', 'helferliste.name'),
     ladefehler: '',
+    version: 0,           // Version der Code.gs (0 = noch unbekannt, 1 = alt ohne Versionsangabe)
     springeZu: ''
   };
 
@@ -217,9 +218,16 @@
       schichten.sort(function (a, b) {
         return String(a.tag).localeCompare(String(b.tag)) || String(a.von).localeCompare(String(b.von));
       });
-      var tage = [t.datum].concat(schichten.map(function (s) { return s.tag; }))
+      var tage = [t.datum, t.bis_datum].concat(schichten.map(function (s) { return s.tag; }))
         .filter(function (x) { return alsDatum(x); }).sort();
+      var plaetze = t.plaetze == null ? '' : String(t.plaetze);
+      var direkt = leute[t.id] || [];
       return Object.assign({}, t, {
+        // von/bis heißen in der Tabelle „Uhrzeit“; hier stehen von/bis für den Zeitraum in Tagen
+        uhrVon: t.von || '', uhrBis: t.bis || '',
+        plaetze: plaetze,
+        leute: direkt,
+        direkt: plaetze !== '' || direkt.length > 0,
         schichten: schichten,
         stationen: einzigartig(eigene.map(function (s) { return s.station; })), // Reihenfolge wie angelegt
         von: tage[0] || '',
@@ -277,6 +285,11 @@
     var h = heute();
     var liste = [];
     z.sicht.termine.forEach(function (t) {
+      if (!istVorbei(t)) {
+        t.leute.forEach(function (e) {
+          if (ich(e.name)) liste.push({ e: e, termin: t, schicht: null, sortierung: (t.von || '9999') + ' ' + (t.uhrVon || '') });
+        });
+      }
       t.schichten.forEach(function (s) {
         if (s.tag && s.tag < h) return;
         s.leute.forEach(function (e) {
@@ -402,7 +415,7 @@
     if (z.springeZu && vergangen.some(function (t) { return 't-' + t.id === z.springeZu; })) z.vergangene = true;
 
     var offen = kommend.some(function (t) {
-      return t.schichten.some(function (s) { return s.tag >= heute() && freiePlaetze(s) > 0; });
+      return direktFrei(t) > 0 || t.schichten.some(function (s) { return s.tag >= heute() && freiePlaetze(s) > 0; });
     });
     var h = ansichtHtml() + alsHtml() + '<div class="leiste">' +
       (offen ? '<button class="link" data-aktion="teilen-alle">Offene Plätze per WhatsApp teilen</button>' : '<span></span>') +
@@ -499,12 +512,26 @@
   }
 
   // Putzdienst: Gruppen reihum je Monat ab „ab“, einzelne Monate unter „monate“ festlegbar
+  // 'JJJJ-M', 'JJJJ-MM', 'M.JJJJ' oder 'MM/JJJJ' → 'JJJJ-MM'
+  function monatNorm(w) {
+    var s = String(w == null ? '' : w).trim();
+    var r = /^(\d{4})-(\d{1,2})$/.exec(s) || null;
+    if (r) return +r[2] >= 1 && +r[2] <= 12 ? r[1] + '-' + zz(+r[2]) : '';
+    r = /^(\d{1,2})[./](\d{4})$/.exec(s);
+    if (r) return +r[1] >= 1 && +r[1] <= 12 ? r[2] + '-' + zz(+r[1]) : '';
+    return '';
+  }
+
   function putzdienst(jm) {
     var p = KONF.putzdienst || {};
-    if (p.monate && p.monate[jm]) return String(p.monate[jm]);
+    var monate = p.monate || {};
+    for (var k in monate) {
+      if (Object.prototype.hasOwnProperty.call(monate, k) && monatNorm(k) === jm && monate[k]) return String(monate[k]);
+    }
     var g = Array.isArray(p.gruppen) ? p.gruppen : [];
-    if (!g.length || !/^\d{4}-\d{2}$/.test(p.ab || '')) return '';
-    var abstand = (+jm.slice(0, 4) - +p.ab.slice(0, 4)) * 12 + (+jm.slice(5, 7) - +p.ab.slice(5, 7));
+    var ab = monatNorm(p.ab);
+    if (!g.length || !ab) return '';
+    var abstand = (+jm.slice(0, 4) - +ab.slice(0, 4)) * 12 + (+jm.slice(5, 7) - +ab.slice(5, 7));
     return abstand < 0 ? '' : String(g[abstand % g.length]);
   }
 
@@ -513,6 +540,7 @@
 
   // Uhrzeit für die Übersicht: aus den Schichten des ersten Tages, sonst „Beginn: …“ aus der Info
   function terminZeit(t) {
+    if (t.uhrVon) return t.uhrVon + (t.uhrBis ? '–' + t.uhrBis : '');
     var ersterTag = t.schichten.filter(function (s) { return s.tag === t.von && s.von; });
     if (ersterTag.length) {
       var anfang = ersterTag.map(function (s) { return s.von; }).sort()[0];
@@ -582,7 +610,7 @@
         var t = finde(z.sicht.termine, p.termin_id);
         var o = finde(p.optionen, p.ergebnis);
         if (!t || istVorbei(t)) { if (admin()) h += '<p class="ergebnis leise">„' + esc(p.titel) + '“: Abstimmung abgeschlossen' + loeschen + '</p>'; return; }
-        var mitListe = t.schichten.some(function (s) { return s.station === 'Teilnehmer'; });
+        var mitListe = t.direkt || t.schichten.some(function (s) { return s.station === 'Teilnehmer'; });
         h += '<p class="ergebnis">„' + esc(p.titel) + '“ ist per Abstimmung auf <strong>' + esc(datumLang(t.datum)) + '</strong> festgelegt' +
           (o ? ' (' + o.stimmen.length + (o.stimmen.length === 1 ? ' Stimme' : ' Stimmen') + ')' : '') +
           (mitListe ? '. Wer dafür gestimmt hat, ist als Teilnehmer eingetragen' : '') +
@@ -693,12 +721,14 @@
       h += terminFormular(t);
     } else {
       var rel = vorbei ? '' : relativ(t.von);
-      h += '<div class="t-datum">' + esc(zeitraum(t.von, t.bis)) + (rel ? ' · ' + rel : '') + '</div>';
+      var uhr = uhrText(t);
+      h += '<div class="t-datum">' + esc(zeitraum(t.von, t.bis)) + (uhr ? ' · ' + esc(uhr) : '') + (rel ? ' · ' + rel : '') + '</div>';
       h += '<h2>' + esc(t.titel) + '</h2>';
       if (t.ort) h += '<div class="t-ort">' + esc(t.ort) + '</div>';
       if (t.info) h += '<p class="info">' + mitLinks(t.info) + '</p>';
     }
 
+    if (t.direkt) h += '<div class="schichten">' + direktZeile(t, vorbei) + '</div>';
     h += schichtenHtml(t);
     if (istOffen('schicht', '', t.id)) h += schichtFormular(t, null);
     if (istOffen('kopieren', t.id)) h += kopierFormular(t);
@@ -716,10 +746,28 @@
     return h + '</section>';
   }
 
+  // „14:00–16:00 Uhr“ oder „19:00 Uhr“
+  function uhrText(t) {
+    if (!t.uhrVon) return '';
+    return t.uhrVon + (t.uhrBis ? '–' + t.uhrBis : '') + ' Uhr';
+  }
+
+  // Eintragen direkt beim Termin (ohne Schicht)
+  function direktZeile(t, vorbei) {
+    var max = zahl(t.plaetze);
+    var n = t.leute.length;
+    var voll = max > 0 && n >= max;
+    var gesperrt = t.plaetze === ''; // Eintragen abgeschaltet, alte Namen bleiben sichtbar
+    var h = '<div class="zeile ohne-zeit direkt' + (voll ? ' ist-voll' : '') + '">' +
+      zahlHtml(n, max) +
+      '<span class="z-namen">' + namenHtml(t.leute, vorbei) + '</span>' +
+      '<span class="z-aktion">' + (gesperrt ? '' : aktionHtml(t.id, vorbei, voll, t.leute, true)) + '</span></div>';
+    if (istOffen('eintragen', t.id) && !vorbei && !voll && !gesperrt) h += eintragFormular(t.id);
+    return h;
+  }
+
   function schichtenHtml(t) {
-    if (!t.schichten.length) {
-      return admin() ? '<p class="leise klein">Noch keine Schichten – über „Schichten hinzufügen“ anlegen.</p>' : '';
-    }
+    if (!t.schichten.length) return '';
     var tage = einzigartig(t.schichten.map(function (s) { return s.tag; }));
     var mehrtaegig = tage.length > 1;
     var h = '<div class="schichten">';
@@ -953,6 +1001,11 @@
         wann = datumKurz(m.schicht.tag) + (zeitText(m.schicht) ? ' · ' + zeitText(m.schicht) : '');
         was = '<a href="#t-' + esc(m.termin.id) + '">' + esc(m.termin.titel) + '</a>' +
           (m.schicht.station ? ' · ' + esc(m.schicht.station) : '');
+      } else if (m.termin) {
+        var t = m.termin;
+        wann = datumKurz(t.von) + (t.bis !== t.von ? ' – ' + datumKurz(t.bis) : '') +
+          (t.uhrVon ? ' · ' + t.uhrVon + (t.uhrBis ? '–' + t.uhrBis : '') : '');
+        was = '<a href="#t-' + esc(t.id) + '">' + esc(t.titel) + '</a>';
       } else {
         wann = m.aufgabe.frist ? 'bis ' + datumKurz(m.aufgabe.frist) : 'Aufgabe';
         was = '<a href="#a-' + esc(m.aufgabe.id) + '">' + esc(m.aufgabe.titel) + '</a>' +
@@ -963,7 +1016,7 @@
         '<span><button class="link" data-aktion="austragen" data-id="' + esc(m.e.id) + '">absagen</button></span></li>';
     });
     h += '</ul>';
-    if (liste.some(function (m) { return m.schicht; })) {
+    if (liste.some(function (m) { return m.termin; })) {
       h += '<p class="t-links"><button class="link" data-aktion="ics-meine">Meine Termine in den Kalender übernehmen</button></p>';
     }
     return h;
@@ -973,13 +1026,25 @@
 
   function terminFormular(t) {
     t = t || {};
+    var direkt = t.id ? t.plaetze !== '' : true; // neue Termine: Eintragen direkt beim Termin vorausgewählt
+    var zeit = t.uhrVon ? t.uhrVon + (t.uhrBis ? '–' + t.uhrBis : '') : '';
+    var veraltet = !backend.demo && z.version > 0 && z.version < 3;
     return '<form class="kasten" data-form="termin" data-id="' + esc(t.id || '') + '">' +
       '<h3>' + (t.id ? 'Termin bearbeiten' : 'Neuer Termin') + '</h3>' +
+      (veraltet ? '<p class="warnung">Uhrzeit, Bis-Datum und Eintragen beim Termin werden erst gespeichert, wenn die neue ' +
+        'Code.gs in Apps Script eingefügt und neu bereitgestellt ist.</p>' : '') +
       '<label>Titel<input name="titel" required maxlength="120" value="' + esc(t.titel || '') + '" placeholder="z. B. Adventsmarkt"></label>' +
-      '<div class="reihe"><label>Datum<input type="date" name="datum" required value="' + esc(t.datum || '') + '">' +
-      '<span class="tipp">Mehrere Tage? Hier den ersten Tag eintragen, die weiteren Tage bei den Schichten.</span></label>' +
+      '<div class="reihe"><label>Datum<input type="date" name="datum" required value="' + esc(t.datum || '') + '"></label>' +
+      '<label>Bis<input type="date" name="bis_datum" value="' + esc(t.bis_datum || '') + '"><span class="tipp">optional, nur bei mehreren Tagen</span></label></div>' +
+      '<div class="reihe"><label>Uhrzeit<input name="zeit" maxlength="40" value="' + esc(zeit) + '" placeholder="z. B. 14:00–16:00 oder 19:00">' +
+      '<span class="tipp">optional</span></label>' +
       '<label>Ort<input name="ort" maxlength="150" value="' + esc(t.ort || '') + '" placeholder="optional"></label></div>' +
       '<label>Info<textarea name="info" rows="3" maxlength="2000" placeholder="optional">' + esc(t.info || '') + '</textarea></label>' +
+      '<div class="reihe"><label class="haken-zeile"><input type="checkbox" name="direkt"' + (direkt ? ' checked' : '') + '> Direkt beim Termin eintragen</label>' +
+      '<label>Plätze<input type="number" name="plaetze" min="0" max="999" inputmode="numeric" value="' + esc(t.plaetze ? zahl(t.plaetze) : 0) + '">' +
+      '<span class="tipp">0 = beliebig viele</span></label></div>' +
+      '<p class="tipp">Braucht es verschiedene Aufgaben oder Zeiten (z. B. Aufbau, Kasse)? Dann nach dem Speichern zusätzlich ' +
+      '„Schichten hinzufügen“. Ohne Häkchen trägt man sich nur bei den Schichten ein.</p>' +
       '<div class="knoepfe"><button type="submit" class="haupt">Speichern</button>' +
       '<button type="button" data-aktion="schliessen">Abbrechen</button></div></form>';
   }
@@ -1036,7 +1101,9 @@
     var gemerkt = {};
     document.querySelectorAll('form[data-form]').forEach(function (f) {
       var w = {};
-      Array.prototype.forEach.call(f.elements, function (el) { if (el.name) w[el.name] = el.value; });
+      Array.prototype.forEach.call(f.elements, function (el) {
+        if (el.name) w[el.name] = el.type === 'checkbox' ? el.checked : el.value;
+      });
       gemerkt[formSchluessel(f)] = w;
     });
     return gemerkt;
@@ -1067,7 +1134,9 @@
       var w = gemerkt[formSchluessel(f)];
       if (!w) return;
       Array.prototype.forEach.call(f.elements, function (el) {
-        if (el.name && Object.prototype.hasOwnProperty.call(w, el.name)) el.value = w[el.name];
+        if (!el.name || !Object.prototype.hasOwnProperty.call(w, el.name)) return;
+        if (el.type === 'checkbox') el.checked = !!w[el.name];
+        else el.value = w[el.name];
       });
     });
   }
@@ -1193,7 +1262,7 @@
 
   function laden(still) {
     return backend.lesen().then(function (a) {
-      if (a.daten) { setzeDaten(a.daten, true); z.ladefehler = ''; }
+      if (a.daten) { setzeDaten(a.daten, true); z.ladefehler = ''; z.version = a.version || 1; }
       else if (!a.ok) throw new Error(a.fehler || 'unbekannter Fehler');
       render();
     }).catch(function (e) {
@@ -1208,7 +1277,7 @@
     }).then(function (a) {
       if (knopf) { knopf.disabled = false; knopf.textContent = knopf.getAttribute('data-text'); }
       if (eintrag) ausstehend.splice(ausstehend.indexOf(eintrag), 1);
-      if (a.daten) setzeDaten(a.daten, true);
+      if (a.daten) { setzeDaten(a.daten, true); z.version = a.version || 1; }
       else if (eintrag) zeigeStand();
       if (!a.ok && a.fehler === 'Unbekannte Aktion.') {
         a.fehler = 'Dafür muss zuerst die neue Code.gs in Apps Script eingefügt und neu bereitgestellt werden (siehe Anleitung).';
@@ -1250,14 +1319,24 @@
     return location.href.split('#')[0] + (anker ? '#' + anker : '');
   }
 
+  // Freie Plätze beim direkten Eintragen (0 = keine, Infinity = beliebig viele)
+  function direktFrei(t) {
+    if (t.plaetze === '' || istVorbei(t)) return 0;
+    return freiePlaetze({ anzahl: t.plaetze, leute: t.leute });
+  }
+
   function teilenText(termine, einzeln) {
     var zeilen = [];
     termine.forEach(function (t) {
       var offen = t.schichten.filter(function (s) { return s.tag >= heute() && freiePlaetze(s) > 0; });
-      if (!einzeln && !offen.length) return;
+      var frei = direktFrei(t);
+      if (!einzeln && !offen.length && !frei) return;
       var mehrtaegig = einzigartig(t.schichten.map(function (s) { return s.tag; })).length > 1;
+      var uhr = uhrText(t);
       zeilen.push('*' + t.titel + '*');
-      zeilen.push(zeitraum(t.von, t.bis) + (t.ort ? ', ' + t.ort : ''));
+      zeilen.push(zeitraum(t.von, t.bis) + (uhr ? ', ' + uhr : '') + (t.ort ? ', ' + t.ort : ''));
+      if (frei) zeilen.push(frei === Infinity ? 'Jeder ist willkommen – bitte eintragen.' : 'Noch ' + frei + (frei === 1 ? ' Platz' : ' Plätze') + ' frei.');
+      else if (t.plaetze !== '' && !t.schichten.length) zeilen.push('Alle Plätze sind belegt – danke!');
       if (offen.length) {
         zeilen.push('Noch gesucht:');
         // eine Zeile pro Station, in der Reihenfolge wie auf der Seite
@@ -1332,7 +1411,10 @@
   function icsTermin(t) {
     var mitZeit = t.schichten.filter(function (s) { return s.von; });
     var eintrag = { uid: t.id, titel: t.titel, ort: t.ort, info: (t.info ? t.info + '\n\n' : '') + seitenLink('t-' + t.id), tag: t.von, bisTag: t.bis };
-    if (t.von === t.bis && mitZeit.length) {
+    if (t.von === t.bis && t.uhrVon) {
+      eintrag.von = t.uhrVon;
+      eintrag.bis = t.uhrBis;
+    } else if (t.von === t.bis && mitZeit.length) {
       eintrag.von = mitZeit.map(function (s) { return s.von; }).sort()[0];
       var enden = mitZeit.map(function (s) { return s.bis; }).filter(Boolean).sort();
       eintrag.bis = enden[enden.length - 1] || '';
@@ -1341,11 +1423,20 @@
   }
 
   function icsMeine() {
-    var liste = meineEintraege().filter(function (m) { return m.schicht && m.schicht.tag; }).map(function (m) {
+    var liste = meineEintraege().filter(function (m) { return m.termin && m.termin.von; }).map(function (m) {
+      var t = m.termin;
+      if (!m.schicht) {
+        // direkt beim Termin: einzelner Tag mit Uhrzeit, sonst ganztägig über alle Tage
+        var einTag = t.von === t.bis;
+        return {
+          uid: m.e.id, titel: t.titel, ort: t.ort, info: (t.info ? t.info + '\n\n' : '') + seitenLink('t-' + t.id),
+          tag: t.von, bisTag: t.bis, von: einTag ? t.uhrVon : '', bis: einTag ? t.uhrBis : ''
+        };
+      }
       var s = m.schicht;
       return {
-        uid: m.e.id, titel: m.termin.titel + (s.station ? ': ' + s.station : ''),
-        ort: m.termin.ort, info: (s.info ? s.info + '\n\n' : '') + seitenLink('t-' + m.termin.id),
+        uid: m.e.id, titel: t.titel + (s.station ? ': ' + s.station : ''),
+        ort: t.ort, info: (s.info ? s.info + '\n\n' : '') + seitenLink('t-' + t.id),
         tag: s.tag, von: s.von, bis: s.bis
       };
     });
@@ -1682,17 +1773,15 @@
       });
     } else if (art === 'termin') {
       w.id = id;
+      // Häkchen „Direkt beim Termin eintragen“: Plätze (0 = beliebig) – ohne Häkchen leer
+      w.plaetze = f.elements.direkt && f.elements.direkt.checked ? String(zahl(w.plaetze)) : '';
+      delete w.direkt;
       verwalten({ aktion: 'termin_speichern', termin: w }, knopf).then(function (a) {
         if (a.ok) {
-          // Nach dem Anlegen gleich Schichten hinzufügen
-          z.offen = id ? null : { art: 'schicht', id: '', termin: a.id };
-          if (!id) z.springeZu = 't-' + a.id;
+          z.offen = null;
+          z.springeZu = 't-' + (id || a.id);
         }
         render();
-        if (a.ok && !id) {
-          var feld = document.querySelector('form[data-form=schicht] input[name=station]');
-          if (feld) feld.focus();
-        }
       });
     } else if (art === 'schicht') {
       w.id = id;
@@ -1791,6 +1880,7 @@
     var sonntag = isoVon(advent);
     var markt = plusTage(sonntag, -1);
     var naechsterSonntag = tag((7 - h.getDay()) % 7 || 7);
+    var freitag = tag(30 + (5 - (h.getDay() + 30) % 7 + 7) % 7); // ein Freitag in gut vier Wochen
     var jetzt = new Date().toISOString();
 
     function s(id, termin, station, von, bis, anzahl, datum, info) {
@@ -1802,17 +1892,20 @@
 
     return {
       Termine: [
-        { id: 't1', titel: 'Kirchcafé nach dem Gottesdienst', datum: naechsterSonntag, ort: 'Gemeindehaus', info: '' },
-        { id: 't2', titel: 'Seniorennachmittag', datum: tag(10), ort: 'Gemeindehaus, großer Saal', info: 'Mit Kaffee, Kuchen und Liedern zum Herbst.' },
-        { id: 't3', titel: 'Gemeindeversammlung', datum: tag(24), ort: 'Kirche', info: 'Bericht aus dem Kirchenvorstand, Haushalt, Verschiedenes.' },
+        // einfacher Termin: Uhrzeit und Eintragen direkt beim Termin
+        { id: 't1', titel: 'Kirchcafé nach dem Gottesdienst', datum: naechsterSonntag, ort: 'Gemeindehaus', info: 'Kaffee kochen, Kuchen aufschneiden, danach spülen.', von: '10:30', bis: '13:30', plaetze: '4' },
+        // nur mit Schichten
+        { id: 't2', titel: 'Seniorennachmittag', datum: tag(10), ort: 'Gemeindehaus, großer Saal', info: 'Mit Kaffee, Kuchen und Liedern zum Herbst.', von: '14:30', bis: '17:00', plaetze: '' },
+        // nur zur Info, ohne Eintragen
+        { id: 't3', titel: 'Gemeindeversammlung', datum: tag(24), ort: 'Kirche', info: 'Bericht aus dem Kirchenvorstand, Haushalt, Verschiedenes.', von: '19:00', bis: '', plaetze: '' },
+        // mehrtägig mit Bis-Datum und Platzgrenze
+        { id: 't5', titel: 'Jugendwochenende', datum: freitag, bis_datum: plusTage(freitag, 2), ort: 'Jugendhaus am See', info: 'Anreise Freitag 17 Uhr, Rückkehr Sonntag nach dem Mittagessen.', von: '17:00', bis: '', plaetze: '12' },
         {
           id: 't4', titel: 'Adventsmarkt', datum: markt, ort: 'Kirchplatz',
-          info: 'Samstag 14–20 Uhr, Sonntag nach dem Gottesdienst bis 18 Uhr.\nBitte warm anziehen!'
+          info: 'Samstag 14–20 Uhr, Sonntag nach dem Gottesdienst bis 18 Uhr.\nBitte warm anziehen!', plaetze: ''
         }
       ],
       Schichten: [
-        s('s1', 't1', 'Kaffee und Kuchen', '10:30', '12:30', 3),
-        s('s2', 't1', 'Spülen', '12:30', '13:30', 2),
         s('s3', 't2', 'Fahrdienst', '14:00', '', 3, '', 'Abholen und wieder nach Hause bringen'),
         s('s4', 't2', 'Bewirtung', '14:30', '17:00', 2),
         s('s5', 't4', 'Aufbau', '09:00', '13:00', 6),
@@ -1837,7 +1930,8 @@
         { id: 'a4', titel: 'Gemeindebrief verteilen', info: 'Die Bezirke werden im Gemeindebüro aufgeteilt.', frist: '', anzahl: '0' }
       ],
       Eintragungen: [
-        e('e1', 's1', 'Maria'), e('e2', 's1', 'Thomas'),
+        e('e1', 't1', 'Maria'), e('e2', 't1', 'Thomas', 'bringe Kuchen mit'),
+        e('e20', 't5', 'Lena'), e('e21', 't5', 'Jonas'), e('e22', 't5', 'Mia'),
         e('e3', 's3', 'Klaus', 'mit Kleinbus'),
         e('e4', 's5', 'Jonas'), e('e5', 's5', 'Peter'), e('e6', 's5', 'Lena'),
         e('e7', 's6', 'Sabine'), e('e8', 's6', 'Ute'),

@@ -28,10 +28,13 @@ const PASSWORT = 'bitte-aendern';
 // ============ AB HIER NICHTS ÄNDERN NÖTIG ==============
 
 const STANDARD_PASSWORT = 'bitte-aendern';
+const VERSION = 3; // die Website prüft damit, ob diese Datei aktuell ist
 const ZEITZONE = 'Europe/Berlin';
 
 const TABELLEN = {
-  Termine: ['id', 'titel', 'datum', 'ort', 'info'],
+  // von/bis: Uhrzeit; bis_datum: letzter Tag bei mehrtägigen Terminen;
+  // plaetze: '' = kein Eintragen direkt beim Termin, '0' = beliebig viele, sonst Höchstzahl
+  Termine: ['id', 'titel', 'datum', 'ort', 'info', 'bis_datum', 'von', 'bis', 'plaetze'],
   Schichten: ['id', 'termin_id', 'station', 'datum', 'von', 'bis', 'anzahl', 'info'],
   Aufgaben: ['id', 'titel', 'info', 'frist', 'anzahl', 'eltern_id', 'erledigt', 'erledigt_von'],
   Eintragungen: ['id', 'bezug', 'name', 'notiz', 'fuer', 'zeitpunkt'],
@@ -111,15 +114,17 @@ const AKTIONEN = {
     if (!name) throw fehler_('Bitte deinen Namen eingeben.');
     const notiz = einzeilig_(a.notiz, 200);
     const bezug = String(a.bezug || '');
-    const ziel = finde_(ctx.db.Schichten, bezug) || finde_(ctx.db.Aufgaben, bezug);
+    const termin = finde_(ctx.db.Termine, bezug);
+    const ziel = finde_(ctx.db.Schichten, bezug) || finde_(ctx.db.Aufgaben, bezug) || termin;
     if (!ziel) throw fehler_('Diesen Eintrag gibt es nicht mehr. Bitte Seite neu laden.');
     if (ziel.erledigt) throw fehler_('Diese Aufgabe ist schon erledigt.');
+    if (termin && termin.plaetze === '') throw fehler_('Bei diesem Termin trägt man sich bei den Schichten ein.');
 
     const liste = ctx.db.Eintragungen.filter(function (e) { return e.bezug === bezug; });
     if (liste.some(function (e) { return gleicherName_(e.name, name); })) {
       throw fehler_(name + ' ist hier schon eingetragen.');
     }
-    const max = zahl_(ziel.anzahl);
+    const max = zahl_(termin ? termin.plaetze : ziel.anzahl);
     if (max > 0 && liste.length >= max) throw fehler_('Leider schon voll – jemand war schneller.');
 
     neu_(ctx, 'Eintragungen', {
@@ -142,7 +147,21 @@ const AKTIONEN = {
     if (!titel) throw fehler_('Bitte einen Titel angeben.');
     const datum = datum_(t.datum);
     if (!datum) throw fehler_('Bitte ein gültiges Datum angeben.');
-    const daten = { titel: titel, datum: datum, ort: einzeilig_(t.ort, 150), info: mehrzeilig_(t.info, 2000) };
+    let bisDatum = '';
+    if (t.bis_datum) {
+      bisDatum = datum_(t.bis_datum);
+      if (!bisDatum) throw fehler_('Bitte ein gültiges Datum für „bis“ angeben.');
+      if (bisDatum < datum) throw fehler_('Das Ende liegt vor dem Beginn.');
+      if (bisDatum === datum) bisDatum = '';
+    }
+    const zeiten = zeiten_(t.zeit);
+    if (zeiten.length > 1) throw fehler_('Bitte nur eine Uhrzeit oder einen Zeitraum angeben, z. B. 14:00–16:00.');
+    const zeit = zeiten[0] || { von: '', bis: '' };
+    const plaetze = t.plaetze === '' || t.plaetze == null ? '' : String(zahl_(t.plaetze));
+    const daten = {
+      titel: titel, datum: datum, ort: einzeilig_(t.ort, 150), info: mehrzeilig_(t.info, 2000),
+      bis_datum: bisDatum, von: zeit.von, bis: zeit.bis, plaetze: plaetze
+    };
 
     if (t.id) {
       const alt = finde_(ctx.db.Termine, t.id);
@@ -168,6 +187,7 @@ const AKTIONEN = {
     const t = finde_(ctx.db.Termine, a.id);
     if (!t) throw fehler_('Termin nicht gefunden.');
     schichtenVon_(ctx.db, t.id).forEach(function (s) { loescheSchicht_(ctx, s); });
+    eintragungenVon_(ctx.db, t.id).forEach(function (e) { loesche_(ctx, 'Eintragungen', e); });
     loesche_(ctx, 'Termine', t);
     return 'Termin gelöscht.';
   },
@@ -178,7 +198,10 @@ const AKTIONEN = {
     const datum = datum_(a.datum);
     if (!datum) throw fehler_('Bitte ein gültiges Datum für die Kopie angeben.');
     const versatz = tageZwischen_(datum_(t.datum), datum);
-    const kopie = neu_(ctx, 'Termine', { titel: t.titel, datum: datum, ort: t.ort, info: t.info });
+    const kopie = neu_(ctx, 'Termine', {
+      titel: t.titel, datum: datum, ort: t.ort, info: t.info,
+      bis_datum: t.bis_datum ? plusTage_(t.bis_datum, versatz) : '', von: t.von, bis: t.bis, plaetze: t.plaetze
+    });
     schichtenVon_(ctx.db, t.id).forEach(function (s) {
       let d = s.datum ? plusTage_(s.datum, versatz) : '';
       if (d === datum) d = '';
@@ -434,21 +457,18 @@ function festlegen_(ctx, p, optionId) {
       return null;
     }
   }
-  let info = gewinner.von ? 'Beginn: ' + gewinner.von + ' Uhr' : '';
-  if (p.info) info += (info ? '\n' : '') + p.info;
-  const t = neu_(ctx, 'Termine', { titel: p.titel, datum: gewinner.datum, ort: p.ort, info: info });
-
-  // Alle, denen der Termin gepasst hat, stehen direkt in der Liste „Teilnehmer“.
-  // Andere können sich dazu eintragen, und jeder kann wie gewohnt wieder absagen.
-  const liste = neu_(ctx, 'Schichten', {
-    termin_id: t.id, station: 'Teilnehmer', datum: '', von: gewinner.von, bis: '', anzahl: '0', info: ''
+  // Der Termin bekommt die Uhrzeit aus der Abstimmung, und alle, denen er gepasst hat,
+  // sind direkt beim Termin eingetragen. Andere können sich dazu eintragen, jeder kann absagen.
+  const t = neu_(ctx, 'Termine', {
+    titel: p.titel, datum: gewinner.datum, ort: p.ort, info: p.info,
+    bis_datum: '', von: gewinner.von, bis: '', plaetze: '0'
   });
-  const fuer = beschreibung_(ctx.db, liste.id);
+  const fuer = beschreibung_(ctx.db, t.id);
   stimmenVon_(ctx.db, gewinner.id)
     .slice()
     .sort(function (a, b) { return String(a.zeitpunkt) < String(b.zeitpunkt) ? -1 : 1; })
     .forEach(function (v) {
-      neu_(ctx, 'Eintragungen', { bezug: liste.id, name: v.name, notiz: '', fuer: fuer, zeitpunkt: v.zeitpunkt || new Date().toISOString() });
+      neu_(ctx, 'Eintragungen', { bezug: t.id, name: v.name, notiz: '', fuer: fuer, zeitpunkt: v.zeitpunkt || new Date().toISOString() });
     });
 
   aendere_(ctx, 'Abstimmungen', p, { status: 'festgelegt', ergebnis: gewinner.id, termin_id: t.id });
@@ -549,9 +569,9 @@ function eintragungenVon_(db, bezug) {
 }
 
 function aktualisiereFuer_(ctx, terminId) {
-  schichtenVon_(ctx.db, terminId).forEach(function (s) {
-    const fuer = beschreibung_(ctx.db, s.id);
-    eintragungenVon_(ctx.db, s.id).forEach(function (e) {
+  [terminId].concat(schichtenVon_(ctx.db, terminId).map(function (s) { return s.id; })).forEach(function (bezug) {
+    const fuer = beschreibung_(ctx.db, bezug);
+    eintragungenVon_(ctx.db, bezug).forEach(function (e) {
       if (e.fuer !== fuer) aendere_(ctx, 'Eintragungen', e, { fuer: fuer });
     });
   });
@@ -560,13 +580,16 @@ function aktualisiereFuer_(ctx, terminId) {
 /** Lesbarer Text für die Spalte „fuer“ im Sheet, z. B. „Adventsmarkt · Glühwein · 28.11.2026 16:00–18:00“ */
 function beschreibung_(db, bezug) {
   const s = finde_(db.Schichten, bezug);
-  if (s) {
-    const t = finde_(db.Termine, s.termin_id) || {};
-    const d = datum_(s.datum || t.datum);
+  const termin = s ? null : finde_(db.Termine, bezug);
+  if (s || termin) {
+    const t = termin || finde_(db.Termine, s.termin_id) || {};
+    const quelle = s || t;
+    const d = datum_(s ? s.datum || t.datum : t.datum);
     const teile = [t.titel || 'Termin'];
-    if (s.station) teile.push(s.station);
+    if (s && s.station) teile.push(s.station);
     let wann = d ? d.split('-').reverse().join('.') : '';
-    if (s.von) wann += (wann ? ' ' : '') + s.von + (s.bis ? '–' + s.bis : '');
+    if (!s && t.bis_datum) wann += '–' + t.bis_datum.split('-').reverse().join('.');
+    if (quelle.von) wann += (wann ? ' ' : '') + quelle.von + (quelle.bis ? '–' + quelle.bis : '');
     if (wann) teile.push(wann);
     return teile.join(' · ');
   }
@@ -697,6 +720,7 @@ function antwort_(anfrage) {
   } catch (err) {
     ergebnis = {
       ok: false,
+      version: VERSION,
       fehler: err && err.nutzerfehler ? err.message : 'Fehler auf dem Server: ' + (err && err.message ? err.message : err)
     };
     try { ergebnis.daten = ausCache_() || oeffentlich(ladeTabellen_().db); } catch (x) { /* egal */ }
@@ -711,12 +735,12 @@ function ausfuehren_(anfrage) {
   // Lesen geht meist aus dem Zwischenspeicher – das spart das Laden der Tabelle.
   if (anfrage.aktion === 'daten') {
     const gemerkt = ausCache_();
-    if (gemerkt) return { ok: true, meldung: '', daten: gemerkt };
+    if (gemerkt) return { ok: true, version: VERSION, meldung: '', daten: gemerkt };
   }
   // Anmelden prüft nur das Passwort.
   if (anfrage.aktion === 'anmelden') {
     const erg = verarbeite({}, anfrage, opt);
-    return { ok: true, meldung: erg.meldung };
+    return { ok: true, version: VERSION, meldung: erg.meldung };
   }
 
   // Alles andere unter Sperre: So überschreiben sich gleichzeitige Eintragungen nicht,
@@ -732,7 +756,7 @@ function ausfuehren_(anfrage) {
     }
     const daten = oeffentlich(ctx.db);
     inCache_(daten);
-    return { ok: true, meldung: erg.meldung, id: erg.id, daten: daten };
+    return { ok: true, version: VERSION, meldung: erg.meldung, id: erg.id, daten: daten };
   } finally {
     lock.releaseLock();
   }

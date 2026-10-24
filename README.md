@@ -6,7 +6,7 @@ Eine schlichte Website, auf der man sich als Helfer für Termine und Aufgaben ei
 
 ## Was sie kann
 
-- **Termine** mit Datum, Ort und Info. Darunter Stationen (z. B. Glühweinstand, Kasse) mit eigenen Uhrzeiten, auch über mehrere Tage.
+- **Termine** mit Datum, optional Bis-Datum für mehrere Tage, Uhrzeit (z. B. „14:00–16:00“ oder „19:00“), Ort und Info. Man trägt sich **direkt beim Termin** ein, optional mit Platzgrenze. Bei Bedarf kommen **Schichten** dazu (z. B. Aufbau, Glühweinstand, Kasse) mit eigenen Zeiten und Plätzen. Ohne das Häkchen „Direkt beim Termin eintragen“ trägt man sich nur bei den Schichten ein, oder der Termin dient nur zur Info.
 - **Aufgaben ohne festen Termin**, z. B. Kuchen backen oder Plakate aufhängen, optional mit „erledigen bis“.
 - **Unteraufgaben:** Eine Aufgabe kann in Teile aufgeteilt werden, z. B. „Weihnachtsbaum besorgen“ in „Baum aussuchen“, „Anhänger organisieren“ und „Aufstellen“. Für jeden Teil trägt man sich einzeln ein und hakt ihn ab, wenn er erledigt ist. Bei der Aufgabe steht dann „2 von 3 Unteraufgaben erledigt“. Die ganze Aufgabe hakt man zum Schluss selbst ab („Ganze Aufgabe erledigt“). Erst dann wandert sie nach unten unter „Erledigte Aufgaben“. Aufgaben ohne Unteraufgaben hakt man direkt ab. In der Verwaltung legt man über „+ Unteraufgaben“ mehrere auf einmal an, eine pro Zeile.
 - **Eintragen** mit Namen und optionaler Notiz („bringe Waffeleisen mit“), **absagen** über das × neben dem Namen.
@@ -72,7 +72,7 @@ Mit **Commit changes** speichern. Nach etwa einer Minute ist die Seite verbunden
 
 ### 4. Termine anlegen
 
-Ganz unten auf der Seite auf **Verwalten** klicken und das Passwort eingeben. Dann **+ Neuer Termin**. Nach dem Speichern öffnet sich direkt „Schichten hinzufügen“.
+Ganz unten auf der Seite auf **Verwalten** klicken und das Passwort eingeben. Dann **+ Neuer Termin**: Titel, Datum, bei Bedarf Bis-Datum und Uhrzeit. Mit dem Häkchen „Direkt beim Termin eintragen“ (vorausgewählt) können sich alle sofort eintragen. Braucht es verschiedene Aufgaben oder Zeiten, beim Termin zusätzlich **Schichten hinzufügen**.
 
 Tipp: Bei „Zeiten“ kann man mehrere auf einmal angeben, z. B. `14-16, 16-18, 18-20`. Daraus werden drei Schichten mit der gleichen Station. Für einen zweiten Markttag einfach das Datum in der Schicht ändern.
 
