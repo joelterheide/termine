@@ -1,6 +1,6 @@
-# Helferliste
+# Jahresplan
 
-Eine schlichte Website, auf der man sich als Helfer für Termine und Aufgaben eintragen oder wieder absagen kann. Ähnlich wie TeamPlus, aber ohne App und ohne Anmeldung. Die Daten liegen in einem Google Sheet.
+Eine schlichte Website mit allen Terminen, Diensten und Aufgaben übers Jahr. Man trägt sich ein, wo man mithelfen kann, oder sagt wieder ab. Ähnlich wie TeamPlus, aber ohne App und ohne Anmeldung. Die Daten liegen in einem Google Sheet.
 
 **Seite:** https://joelterheide.github.io/termine/
 

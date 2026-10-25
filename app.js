@@ -1,11 +1,11 @@
-/* Helferliste – Oberfläche
+/* Jahresplan – Oberfläche
  * Lädt die Daten vom Google-Apps-Script (oder im Demo-Modus aus dem Browser)
  * und zeigt Termine, Aufgaben und die eigenen Einträge an. */
 (function () {
   'use strict';
 
   var KONF = Object.assign(
-    { api: '', titel: 'Helferliste', untertitel: '', anleitung: '' },
+    { api: '', titel: 'Jahresplan', untertitel: '', anleitung: '' },
     window.HELFERLISTE || {}
   );
 
