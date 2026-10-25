@@ -28,13 +28,14 @@ const PASSWORT = 'bitte-aendern';
 // ============ AB HIER NICHTS ÄNDERN NÖTIG ==============
 
 const STANDARD_PASSWORT = 'bitte-aendern';
-const VERSION = 3; // die Website prüft damit, ob diese Datei aktuell ist
+const VERSION = 4; // die Website prüft damit, ob diese Datei aktuell ist
 const ZEITZONE = 'Europe/Berlin';
 
 const TABELLEN = {
   // von/bis: Uhrzeit; bis_datum: letzter Tag bei mehrtägigen Terminen;
   // plaetze: '' = kein Eintragen direkt beim Termin, '0' = beliebig viele, sonst Höchstzahl
-  Termine: ['id', 'titel', 'datum', 'ort', 'info', 'bis_datum', 'von', 'bis', 'plaetze'],
+  // kategorie: freier Text, z. B. 'Jugend extern' – was die Website daraus macht, entscheidet sie selbst
+  Termine: ['id', 'titel', 'datum', 'ort', 'info', 'bis_datum', 'von', 'bis', 'plaetze', 'kategorie'],
   Schichten: ['id', 'termin_id', 'station', 'datum', 'von', 'bis', 'anzahl', 'info'],
   Aufgaben: ['id', 'titel', 'info', 'frist', 'anzahl', 'eltern_id', 'erledigt', 'erledigt_von'],
   Eintragungen: ['id', 'bezug', 'name', 'notiz', 'fuer', 'zeitpunkt'],
@@ -160,7 +161,8 @@ const AKTIONEN = {
     const plaetze = t.plaetze === '' || t.plaetze == null ? '' : String(zahl_(t.plaetze));
     const daten = {
       titel: titel, datum: datum, ort: einzeilig_(t.ort, 150), info: mehrzeilig_(t.info, 2000),
-      bis_datum: bisDatum, von: zeit.von, bis: zeit.bis, plaetze: plaetze
+      bis_datum: bisDatum, von: zeit.von, bis: zeit.bis, plaetze: plaetze,
+      kategorie: einzeilig_(t.kategorie, 40)
     };
 
     if (t.id) {
@@ -200,7 +202,8 @@ const AKTIONEN = {
     const versatz = tageZwischen_(datum_(t.datum), datum);
     const kopie = neu_(ctx, 'Termine', {
       titel: t.titel, datum: datum, ort: t.ort, info: t.info,
-      bis_datum: t.bis_datum ? plusTage_(t.bis_datum, versatz) : '', von: t.von, bis: t.bis, plaetze: t.plaetze
+      bis_datum: t.bis_datum ? plusTage_(t.bis_datum, versatz) : '', von: t.von, bis: t.bis, plaetze: t.plaetze,
+      kategorie: t.kategorie
     });
     schichtenVon_(ctx.db, t.id).forEach(function (s) {
       let d = s.datum ? plusTage_(s.datum, versatz) : '';
@@ -461,7 +464,7 @@ function festlegen_(ctx, p, optionId) {
   // sind direkt beim Termin eingetragen. Andere können sich dazu eintragen, jeder kann absagen.
   const t = neu_(ctx, 'Termine', {
     titel: p.titel, datum: gewinner.datum, ort: p.ort, info: p.info,
-    bis_datum: '', von: gewinner.von, bis: '', plaetze: '0'
+    bis_datum: '', von: gewinner.von, bis: '', plaetze: '0', kategorie: ''
   });
   const fuer = beschreibung_(ctx.db, t.id);
   stimmenVon_(ctx.db, gewinner.id)

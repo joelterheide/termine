@@ -9,6 +9,8 @@
   --auf-akzent: #ffffff;
   --fehler: #a12d2d;
   --markiert: #fbf3d5;
+  --kopf: #e6edf7;
+  --kopf-vorbei: #efeeea;
   color-scheme: light;
 }
 
@@ -24,6 +26,8 @@
     --auf-akzent: #181715;
     --fehler: #e59a9a;
     --markiert: #3a3420;
+    --kopf: #1f2836;
+    --kopf-vorbei: #24231f;
     color-scheme: dark;
   }
 }
@@ -195,6 +199,55 @@ textarea { resize: vertical; }
 
 .t-ort { margin-top: .1rem; }
 
+/* Farbig hinterlegte Terminköpfe (nicht bei „Jugend extern“) */
+.termin .t-kopf {
+  background: var(--kopf);
+  padding: .55rem .75rem .6rem;
+  border-radius: 3px;
+}
+.termin.vorbei .t-kopf { background: var(--kopf-vorbei); }
+.termin.extern .t-kopf { background: none; padding: 0; }
+.termin.abstimmung .t-kopf { background: none; padding: 0; }
+
+.etikett {
+  display: inline-block;
+  padding: 0 .4rem;
+  border: 1px solid var(--rand);
+  border-radius: 3px;
+  font-size: .75rem;
+  line-height: 1.4;
+  color: var(--leise);
+  white-space: nowrap;
+  vertical-align: .1em;
+}
+
+/* „Jugend extern“ eingeklappt: eine Zeile */
+.termin.extern.zu { padding: 0; }
+.extern-zeile {
+  display: grid;
+  grid-template-columns: 11rem 1fr auto;
+  gap: .2rem .75rem;
+  align-items: baseline;
+  width: 100%;
+  padding: .55rem 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  color: var(--leise);
+  border-radius: 0;
+}
+.extern-zeile:hover .e-titel { text-decoration: underline; text-underline-offset: 2px; }
+.e-datum { font-variant-numeric: tabular-nums; font-size: .9375rem; }
+.e-titel { color: var(--text); min-width: 0; }
+.termin.vorbei .e-titel { color: var(--leise); }
+
+label.filter { cursor: pointer; white-space: nowrap; }
+label.filter input { margin-right: .35rem; }
+
+.kasten label.haken-zeile.extern-haken { display: block; }
+.kasten label.extern-haken input { margin: 0 .45rem 0 0; }
+.kasten label.extern-haken .tipp { margin-left: 1.5rem; }
+
 .info {
   white-space: pre-line;
   margin: .5rem 0 0;
@@ -327,6 +380,10 @@ label.haken input { margin-right: .4rem; }
 /* ---------- Tabellenansicht ---------- */
 
 .ansicht {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: .3rem 1rem;
   margin: .9rem 0 0;
   font-size: .9375rem;
   color: var(--leise);
@@ -379,6 +436,7 @@ label.haken input { margin-right: .4rem; }
 }
 .uebersicht .ferien td:first-child { padding-left: .4rem; }
 .uebersicht .leer-zeile td { color: var(--leise); }
+.uebersicht tr.extern td, .uebersicht tr.extern a { color: var(--leise); }
 .quelle {
   margin: .75rem 0 0;
   font-size: .8125rem;
@@ -574,6 +632,13 @@ form.zeile-form input { width: auto; flex: 0 1 14rem; }
       "namen namen";
   }
   .zeile.abst { grid-template-columns: auto 1fr auto; }
+  .extern-zeile {
+    grid-template-columns: 1fr auto;
+    grid-template-areas: "datum etikett" "titel titel";
+  }
+  .e-datum { grid-area: datum; }
+  .extern-zeile .etikett { grid-area: etikett; }
+  .e-titel { grid-area: titel; }
   .u-datum { white-space: normal; }
   .monat-zeile .putz { display: block; margin-left: 0; }
   .zeile.unteraufgabe {
@@ -594,6 +659,7 @@ form.zeile-form input { width: auto; flex: 0 1 14rem; }
   .reiter, .fuss, .leiste, .z-aktion, .weg, .t-links, .verw, .vergangen-schalter,
   .hinweis, .meldung, form, .ansicht, .quelle { display: none !important; }
   .uebersicht a { color: inherit; text-decoration: none; }
+  .termin .t-kopf { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .uebersicht tr { break-inside: avoid; }
   .seite { max-width: none; padding: 0; }
   .termin, .aufgabe { break-inside: avoid; }

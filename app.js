@@ -31,7 +31,10 @@
     name: lies('localStorage', 'helferliste.name'),
     ladefehler: '',
     version: 0,           // Version der Code.gs (0 = noch unbekannt, 1 = alt ohne Versionsangabe)
-    springeZu: ''
+    springeZu: '',
+    externAus: lies('localStorage', 'helferliste.externAus') === '1', // „Jugend extern“ ausblenden
+    aufgeklappt: {},      // aufgeklappte Termine „Jugend extern“ (id → true)
+    trotzdem: ''          // ausgeblendeter Termin, der per Link geöffnet wurde
   };
 
   var backend = KONF.api ? apiBackend(String(KONF.api).trim()) : demoBackend();
@@ -226,6 +229,8 @@
         // von/bis heißen in der Tabelle „Uhrzeit“; hier stehen von/bis für den Zeitraum in Tagen
         uhrVon: t.von || '', uhrBis: t.bis || '',
         plaetze: plaetze,
+        kategorie: t.kategorie || '',
+        extern: istExtern(t),
         leute: direkt,
         direkt: plaetze !== '' || direkt.length > 0,
         schichten: schichten,
@@ -275,6 +280,12 @@
   function istAbgelaufen(aufgabe) { return aufgabe.frist && aufgabe.frist < heute(); }
 
   function kommendeTermine() { return z.sicht.termine.filter(function (t) { return !istVorbei(t); }); }
+
+  // „Jugend extern“: wird eingeklappt und ohne Farbe gezeigt und lässt sich ganz ausblenden
+  var EXTERN = 'Jugend extern';
+  function istExtern(t) { return /jugend\s*extern/i.test(String(t.kategorie || '')); }
+  function sichtbar(t) { return !t.extern || !z.externAus || z.trotzdem === t.id; }
+  function sichtbareTermine() { return kommendeTermine().filter(sichtbar); }
   function offeneAufgaben() { return z.sicht.aufgaben.filter(function (g) { return !istAbgelaufen(g) && !g.fertig; }); }
   function erledigteAufgaben() { return z.sicht.aufgaben.filter(function (g) { return !istAbgelaufen(g) && g.fertig; }); }
   function erledigtText(x) {
@@ -427,7 +438,7 @@
   function reiterHtml() {
     var anzahl = { termine: '', aufgaben: '', meine: '' };
     if (z.sicht) {
-      anzahl.termine = kommendeTermine().length;
+      anzahl.termine = sichtbareTermine().length;
       anzahl.aufgaben = offeneAufgaben().length;
       anzahl.meine = z.name ? meineEintraege().length : '';
     }
@@ -457,9 +468,15 @@
   // ---------- Termine ----------
 
   function termineHtml() {
+    // Link auf einen Termin „Jugend extern“: aufklappen und auch zeigen, wenn ausgeblendet
+    var ziel = z.springeZu && finde(z.sicht.termine, z.springeZu.replace(/^t-/, ''));
+    if (ziel && ziel.extern) {
+      z.aufgeklappt[ziel.id] = true;
+      if (z.externAus) z.trotzdem = ziel.id;
+    }
     if (z.ansicht === 'tabelle') return ansichtHtml() + tabelleHtml();
-    var kommend = kommendeTermine();
-    var vergangen = z.sicht.termine.filter(istVorbei);
+    var kommend = sichtbareTermine();
+    var vergangen = z.sicht.termine.filter(istVorbei).filter(sichtbar);
     if (z.springeZu && vergangen.some(function (t) { return 't-' + t.id === z.springeZu; })) z.vergangene = true;
 
     var offen = kommend.some(function (t) {
@@ -507,8 +524,15 @@
       return '<button class="link' + (a === id ? ' aktiv' : '') + '" data-aktion="ansicht" data-id="' + id + '"' +
         (a === id ? ' aria-pressed="true"' : ' aria-pressed="false"') + '>' + text + '</button>';
     }
-    return '<div class="ansicht">Ansicht: ' + knopf('liste', 'Liste') + '<span class="trenn"> · </span>' + knopf('tabelle', 'Tabelle') +
-      (a === 'tabelle' ? '<span class="trenn"> · </span><button class="link" data-aktion="drucken">Drucken</button>' : '') + '</div>';
+    // Schalter nur, wenn es kommende Termine „Jugend extern“ gibt
+    var extern = kommendeTermine().filter(function (t) { return t.extern; }).length;
+    var schalter = extern
+      ? '<label class="filter"><input type="checkbox" data-aktion="extern-filter"' + (z.externAus ? ' checked' : '') + '> ' +
+        EXTERN + ' ausblenden' + (z.externAus ? ' <span class="leise">(' + extern + ')</span>' : '') + '</label>'
+      : '';
+    return '<div class="ansicht"><span>Ansicht: ' + knopf('liste', 'Liste') + '<span class="trenn"> · </span>' + knopf('tabelle', 'Tabelle') +
+      (a === 'tabelle' ? '<span class="trenn"> · </span><button class="link" data-aktion="drucken">Drucken</button>' : '') + '</span>' +
+      schalter + '</div>';
   }
 
   var BUNDESLAND = {
@@ -603,7 +627,7 @@
     if (KONF.ferien && !ferien.geladen && !ferien.laedt) ladeFerien();
     var h0 = heute();
     var start = h0.slice(0, 7);
-    var kommend = kommendeTermine().filter(function (t) { return t.von; });
+    var kommend = sichtbareTermine().filter(function (t) { return t.von; });
     var ende = monatPlus(start, 11);
     kommend.forEach(function (t) { if (t.von.slice(0, 7) > ende) ende = t.von.slice(0, 7); });
 
@@ -631,8 +655,9 @@
         if (e.art === 'ferien') {
           h += '<tr class="ferien"><td class="u-datum">' + esc(spanne(e.f.von, e.f.bis)) + '</td><td></td><td>' + esc(e.f.name) + '</td></tr>';
         } else {
-          h += '<tr><td class="u-datum">' + esc(spanne(e.t.von, e.t.bis)) + '</td><td class="u-zeit">' + esc(terminZeit(e.t)) + '</td>' +
-            '<td><a href="#t-' + esc(e.t.id) + '">' + esc(e.t.titel) + '</a></td></tr>';
+          h += '<tr' + (e.t.extern ? ' class="extern"' : '') + '><td class="u-datum">' + esc(spanne(e.t.von, e.t.bis)) + '</td><td class="u-zeit">' + esc(terminZeit(e.t)) + '</td>' +
+            '<td><a href="#t-' + esc(e.t.id) + '">' + esc(e.t.titel) + '</a>' +
+            (e.t.extern ? ' <span class="etikett">' + EXTERN + '</span>' : '') + '</td></tr>';
         }
       });
     }
@@ -763,16 +788,30 @@
 
   function terminHtml(t) {
     var vorbei = istVorbei(t);
-    var h = '<section class="termin' + (vorbei ? ' vorbei' : '') + '" id="t-' + esc(t.id) + '">';
+    var bearbeiten = istOffen('termin', t.id);
+    // „Jugend extern“: eingeklappt als eine Zeile, Klick klappt auf
+    if (t.extern && !z.aufgeklappt[t.id] && !bearbeiten) {
+      var uhrKurz = t.uhrVon ? t.uhrVon + (t.uhrBis ? '–' + t.uhrBis : '') : '';
+      return '<section class="termin extern zu' + (vorbei ? ' vorbei' : '') + '" id="t-' + esc(t.id) + '">' +
+        '<button class="extern-zeile" data-aktion="extern-auf" data-id="' + esc(t.id) + '" aria-expanded="false">' +
+        '<span class="e-datum">' + esc(spanne(t.von, t.bis) + (uhrKurz ? ' · ' + uhrKurz : '')) + '</span>' +
+        '<span class="e-titel">' + esc(t.titel) + '</span>' +
+        '<span class="etikett">' + EXTERN + '</span></button></section>';
+    }
 
-    if (istOffen('termin', t.id)) {
+    var h = '<section class="termin' + (vorbei ? ' vorbei' : '') + (t.extern ? ' extern' : '') + '" id="t-' + esc(t.id) + '">';
+
+    if (bearbeiten) {
       h += terminFormular(t);
     } else {
       var rel = vorbei ? '' : relativ(t.von);
       var uhr = uhrText(t);
-      h += '<div class="t-datum">' + esc(zeitraum(t.von, t.bis)) + (uhr ? ' · ' + esc(uhr) : '') + (rel ? ' · ' + rel : '') + '</div>';
+      h += '<div class="t-kopf">';
+      h += '<div class="t-datum">' + esc(zeitraum(t.von, t.bis)) + (uhr ? ' · ' + esc(uhr) : '') + (rel ? ' · ' + rel : '') +
+        (t.extern ? ' · <span class="etikett">' + EXTERN + '</span>' : '') + '</div>';
       h += '<h2>' + esc(t.titel) + '</h2>';
       if (t.ort) h += '<div class="t-ort">' + esc(t.ort) + '</div>';
+      h += '</div>';
       if (t.info) h += '<p class="info">' + mitLinks(t.info) + '</p>';
     }
 
@@ -782,6 +821,7 @@
     if (istOffen('kopieren', t.id)) h += kopierFormular(t);
 
     var links = [];
+    if (t.extern && !bearbeiten) links.push('<button class="link" data-aktion="extern-auf" data-id="' + esc(t.id) + '" aria-expanded="true">Einklappen</button>');
     if (!vorbei) links.push('<button class="link" data-aktion="teilen" data-id="' + esc(t.id) + '">Per WhatsApp teilen</button>');
     if (t.von) links.push('<button class="link" data-aktion="ics-termin" data-id="' + esc(t.id) + '">In den Kalender</button>');
     if (admin()) {
@@ -1076,10 +1116,11 @@
     t = t || {};
     var direkt = t.id ? t.plaetze !== '' : true; // neue Termine: Eintragen direkt beim Termin vorausgewählt
     var zeit = t.uhrVon ? t.uhrVon + (t.uhrBis ? '–' + t.uhrBis : '') : '';
-    var veraltet = !backend.demo && z.version > 0 && z.version < 3;
+    var veraltet = !backend.demo && z.version > 0 && z.version < 4;
     return '<form class="kasten" data-form="termin" data-id="' + esc(t.id || '') + '">' +
       '<h3>' + (t.id ? 'Termin bearbeiten' : 'Neuer Termin') + '</h3>' +
-      (veraltet ? '<p class="warnung">Uhrzeit, Bis-Datum und Eintragen beim Termin werden erst gespeichert, wenn die neue ' +
+      (veraltet ? '<p class="warnung">' + (z.version < 3 ? 'Uhrzeit, Bis-Datum, Eintragen beim Termin und „' + EXTERN + '“ werden'
+        : '„' + EXTERN + '“ wird') + ' erst gespeichert, wenn die neue ' +
         'Code.gs in Apps Script eingefügt und neu bereitgestellt ist.</p>' : '') +
       '<label>Titel<input name="titel" required maxlength="120" value="' + esc(t.titel || '') + '" placeholder="z. B. Adventsmarkt"></label>' +
       '<div class="reihe"><label>Datum<input type="date" name="datum" required value="' + esc(t.datum || '') + '"></label>' +
@@ -1088,6 +1129,8 @@
       '<span class="tipp">optional</span></label>' +
       '<label>Ort<input name="ort" maxlength="150" value="' + esc(t.ort || '') + '" placeholder="optional"></label></div>' +
       '<label>Info<textarea name="info" rows="3" maxlength="2000" placeholder="optional">' + esc(t.info || '') + '</textarea></label>' +
+      '<label class="haken-zeile extern-haken"><input type="checkbox" name="extern"' + (t.extern ? ' checked' : '') + '> ' + EXTERN +
+      '<span class="tipp">wird eingeklappt und ohne Farbe angezeigt und lässt sich ausblenden</span></label>' +
       '<div class="reihe"><label class="haken-zeile"><input type="checkbox" name="direkt"' + (direkt ? ' checked' : '') + '> Direkt beim Termin eintragen</label>' +
       '<label>Plätze<input type="number" name="plaetze" min="0" max="999" inputmode="numeric" value="' + esc(t.plaetze ? zahl(t.plaetze) : 0) + '">' +
       '<span class="tipp">0 = beliebig viele</span></label></div>' +
@@ -1634,7 +1677,7 @@
       }
 
       case 'teilen-alle':
-        teilen(teilenText(kommendeTermine(), false));
+        teilen(teilenText(sichtbareTermine(), false));
         break;
 
       case 'ics-termin': {
@@ -1771,6 +1814,25 @@
         window.print();
         break;
 
+      case 'extern-auf':
+        if (z.aufgeklappt[id]) delete z.aufgeklappt[id]; else z.aufgeklappt[id] = true;
+        if (z.trotzdem === id && !z.aufgeklappt[id]) z.trotzdem = '';
+        render();
+        // Beim Aufklappen den Termin im Blick behalten
+        var sek = document.getElementById('t-' + id);
+        if (sek && z.aufgeklappt[id]) {
+          var r = sek.getBoundingClientRect();
+          if (r.top < 0 || r.top > window.innerHeight - 80) sek.scrollIntoView({ block: 'start' });
+        }
+        break;
+
+      case 'extern-filter':
+        z.externAus = !z.externAus;
+        z.trotzdem = '';
+        merke('localStorage', 'helferliste.externAus', z.externAus ? '1' : '');
+        render();
+        break;
+
       case 'station-waehlen': {
         var sf = el.closest('form');
         if (sf) { sf.elements.station.value = el.getAttribute('data-wert'); sf.elements.station.focus(); }
@@ -1835,10 +1897,16 @@
       // Häkchen „Direkt beim Termin eintragen“: Plätze (0 = beliebig) – ohne Häkchen leer
       w.plaetze = f.elements.direkt && f.elements.direkt.checked ? String(zahl(w.plaetze)) : '';
       delete w.direkt;
+      // Kategorie: „Jugend extern“ an/aus, eine andere (künftige) Kategorie bleibt erhalten
+      var bisher = id ? (finde(z.daten.Termine, id) || {}).kategorie || '' : '';
+      w.kategorie = f.elements.extern && f.elements.extern.checked ? EXTERN : (istExtern({ kategorie: bisher }) ? '' : bisher);
+      delete w.extern;
+      if (w.kategorie === EXTERN) z.aufgeklappt[id] = true; // nach dem Speichern offen lassen
       verwalten({ aktion: 'termin_speichern', termin: w }, knopf).then(function (a) {
         if (a.ok) {
           z.offen = null;
           z.springeZu = 't-' + (id || a.id);
+          if (!id && w.kategorie === EXTERN) z.aufgeklappt[a.id] = true;
         }
         render();
       });
@@ -1963,6 +2031,9 @@
         { id: 't2', titel: 'Seniorennachmittag', datum: tag(10), ort: 'Gemeindehaus, großer Saal', info: 'Mit Kaffee, Kuchen und Liedern zum Herbst.', von: '14:30', bis: '17:00', plaetze: '' },
         // nur zur Info, ohne Eintragen
         { id: 't3', titel: 'Gemeindeversammlung', datum: tag(24), ort: 'Kirche', info: 'Bericht aus dem Kirchenvorstand, Haushalt, Verschiedenes.', von: '19:00', bis: '', plaetze: '' },
+        // Jugend extern: eingeklappt, ohne Farbe, ausblendbar
+        { id: 't6', titel: 'Dekanatsjugendgottesdienst', datum: tag(13), ort: 'St. Paul', info: 'Treffpunkt 18:15 Uhr vor dem Gemeindehaus, wir fahren gemeinsam.', von: '19:00', bis: '', plaetze: '0', kategorie: 'Jugend extern' },
+        { id: 't7', titel: 'Kreisjugendring-Vollversammlung', datum: tag(19), ort: 'Jugendzentrum', info: '', von: '18:00', bis: '20:00', plaetze: '', kategorie: 'Jugend extern' },
         // mehrtägig mit Bis-Datum und Platzgrenze
         { id: 't5', titel: 'Jugendwochenende', datum: freitag, bis_datum: plusTage(freitag, 2), ort: 'Jugendhaus am See', info: 'Anreise Freitag 17 Uhr, Rückkehr Sonntag nach dem Mittagessen.', von: '17:00', bis: '', plaetze: '12' },
         {
@@ -1997,6 +2068,7 @@
       Eintragungen: [
         e('e1', 't1', 'Maria'), e('e2', 't1', 'Thomas', 'bringe Kuchen mit'),
         e('e20', 't5', 'Lena'), e('e21', 't5', 'Jonas'), e('e22', 't5', 'Mia'),
+        e('e23', 't6', 'Jonas'), e('e24', 't6', 'Mia'),
         e('e3', 's3', 'Klaus', 'mit Kleinbus'),
         e('e4', 's5', 'Jonas'), e('e5', 's5', 'Peter'), e('e6', 's5', 'Lena'),
         e('e7', 's6', 'Sabine'), e('e8', 's6', 'Ute'),
