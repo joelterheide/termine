@@ -18,6 +18,7 @@ Eine schlichte Website mit allen Terminen, Diensten und Aufgaben übers Jahr. Ma
 - **Terminabstimmungen:** mehrere mögliche Daten (optional mit Uhrzeit) zur Wahl stellen. Jeder klickt bei allen passenden Daten auf „Passt mir“. Am Tag nach „Abstimmen bis“ wird automatisch der Termin mit den meisten Stimmen angelegt, bei Gleichstand der frühere. Wer dafür gestimmt hat, steht dort gleich in der Liste „Teilnehmer“. Andere können sich dazu eintragen, und jeder kann wieder absagen. Über „festlegen“ kann man das auch vorher selbst entscheiden.
 - **Reagiert sofort:** Google braucht pro Anfrage ein bis drei Sekunden. Die Seite zeigt Eintragen, Absagen und Abstimmen trotzdem sofort an und bestätigt im Hintergrund. Beim Öffnen erscheint direkt der zuletzt geladene Stand.
 - **Plätze begrenzen** (2/2 = voll) oder beliebig viele zulassen.
+- **Alle Termine in den Kalender:** Über „Termine in den Kalender“ (in der Liste oben, in der Tabelle neben „Drucken“) lädt man eine Kalenderdatei mit allen Terminen ab einem Stichtag herunter, wahlweise ohne „Jugend extern“. Am Handy einfach öffnen, bei Google Kalender am Computer unter „Einstellungen → Importieren“. Spätere Änderungen kommen nicht automatisch mit.
 - **Meine Einträge:** Namen eingeben und alles auf einen Blick sehen, absagen, in den eigenen Kalender übernehmen.
 - **Per WhatsApp teilen:** erzeugt einen fertigen Text mit den offenen Plätzen und dem Link.
 - **Verwalten** mit Passwort: Termine, Schichten, Aufgaben und Abstimmungen anlegen, ändern, kopieren (z. B. für jeden Sonntag) und löschen.

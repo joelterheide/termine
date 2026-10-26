@@ -184,6 +184,7 @@ textarea { resize: vertical; }
 }
 .termin.vorbei, .aufgabe.vorbei { color: var(--leise); }
 .markiert { background: var(--markiert); transition: background 1.5s; }
+.termin, .aufgabe { scroll-margin-top: .75rem; }
 
 .t-datum {
   color: var(--leise);
@@ -664,3 +665,5 @@ form.zeile-form input { width: auto; flex: 0 1 14rem; }
   .seite { max-width: none; padding: 0; }
   .termin, .aufgabe { break-inside: avoid; }
 }
+
+.kasten .lueckenfueller { flex: 1 1 10rem; }

@@ -413,7 +413,7 @@
       var ziel = document.getElementById(z.springeZu);
       z.springeZu = '';
       if (ziel) {
-        ziel.scrollIntoView();
+        ziel.scrollIntoView({ block: 'start' });
         ziel.classList.add('markiert');
         setTimeout(function () { ziel.classList.remove('markiert'); }, 1800);
       }
@@ -474,7 +474,7 @@
       z.aufgeklappt[ziel.id] = true;
       if (z.externAus) z.trotzdem = ziel.id;
     }
-    if (z.ansicht === 'tabelle') return ansichtHtml() + tabelleHtml();
+    if (z.ansicht === 'tabelle') return ansichtHtml() + (istOffen('kalender') ? kalenderFormular() : '') + tabelleHtml();
     var kommend = sichtbareTermine();
     var vergangen = z.sicht.termine.filter(istVorbei).filter(sichtbar);
     if (z.springeZu && vergangen.some(function (t) { return 't-' + t.id === z.springeZu; })) z.vergangene = true;
@@ -482,12 +482,14 @@
     var offen = kommend.some(function (t) {
       return direktFrei(t) > 0 || t.schichten.some(function (s) { return s.tag >= heute() && freiePlaetze(s) > 0; });
     });
-    var h = ansichtHtml() + alsHtml() + '<div class="leiste">' +
-      (offen ? '<button class="link" data-aktion="teilen-alle">Offene Plätze per WhatsApp teilen</button>' : '<span></span>') +
+    var h = ansichtHtml() + alsHtml() + '<div class="leiste"><span>' +
+      (offen ? '<button class="link" data-aktion="teilen-alle">Offene Plätze per WhatsApp teilen</button><span class="trenn"> · </span>' : '') +
+      '<button class="link" data-aktion="kalender">Termine in den Kalender</button></span>' +
       (admin() ? '<span class="knoepfe"><button data-aktion="termin-neu">+ Neuer Termin</button>' +
         '<button data-aktion="abstimmung-neu">+ Abstimmung</button></span>' : '') +
       '</div>';
 
+    if (istOffen('kalender')) h += kalenderFormular();
     if (istOffen('termin', '')) h += terminFormular(null);
     if (istOffen('abstimmung', '')) h += abstimmungFormular(null);
 
@@ -531,7 +533,8 @@
         EXTERN + ' ausblenden' + (z.externAus ? ' <span class="leise">(' + extern + ')</span>' : '') + '</label>'
       : '';
     return '<div class="ansicht"><span>Ansicht: ' + knopf('liste', 'Liste') + '<span class="trenn"> · </span>' + knopf('tabelle', 'Tabelle') +
-      (a === 'tabelle' ? '<span class="trenn"> · </span><button class="link" data-aktion="drucken">Drucken</button>' : '') + '</span>' +
+      (a === 'tabelle' ? '<span class="trenn"> · </span><button class="link" data-aktion="drucken">Drucken</button>' +
+        '<span class="trenn"> · </span><button class="link" data-aktion="kalender">In den Kalender</button>' : '') + '</span>' +
       schalter + '</div>';
   }
 
@@ -1477,7 +1480,8 @@
   // eintraege: [{ uid, titel, ort, info, tag, bisTag, von, bis }]
   function icsHerunterladen(eintraege, dateiname) {
     var stempel = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
-    var z2 = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Helferliste//DE', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH'];
+    var z2 = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Jahresplan//DE', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+      'X-WR-CALNAME:' + icsText(KONF.titel || 'Jahresplan')];
     eintraege.forEach(function (e) {
       z2.push('BEGIN:VEVENT', 'UID:' + e.uid + '@helferliste', 'DTSTAMP:' + stempel);
       if (e.von) {
@@ -1492,6 +1496,7 @@
       z2.push('SUMMARY:' + icsText(e.titel));
       if (e.ort) z2.push('LOCATION:' + icsText(e.ort));
       if (e.info) z2.push('DESCRIPTION:' + icsText(e.info));
+      if (e.kategorie) z2.push('CATEGORIES:' + icsText(e.kategorie));
       z2.push('END:VEVENT');
     });
     z2.push('END:VCALENDAR');
@@ -1505,8 +1510,35 @@
   }
 
   function icsTermin(t) {
+    icsHerunterladen([icsEintrag(t)], dateiname(t.titel));
+  }
+
+  // Termine ab Stichtag, wahlweise ohne „Jugend extern“
+  function kalenderAuswahl(ab, ohneExtern) {
+    return z.sicht.termine.filter(function (t) {
+      return t.von && (t.bis || t.von) >= ab && !(ohneExtern && t.extern);
+    });
+  }
+
+  function kalenderFormular() {
+    var gibtExtern = z.sicht.termine.some(function (t) { return t.extern; });
+    var ab = heute();
+    var ohne = z.externAus;
+    var n = kalenderAuswahl(ab, ohne).length;
+    return '<form class="kasten" data-form="kalender">' +
+      '<h3>Termine in den Kalender übernehmen</h3>' +
+      '<div class="reihe"><label>Ab<input type="date" name="ab" required value="' + esc(ab) + '"></label><span class="lueckenfueller"></span></div>' +
+      (gibtExtern ? '<label class="haken-zeile extern-haken"><input type="checkbox" name="ohne_extern"' + (ohne ? ' checked' : '') + '> ohne „' + EXTERN + '“</label>' : '') +
+      '<p class="tipp">Lädt eine Kalenderdatei (.ics) herunter. Am Handy einfach öffnen, bei Google Kalender am Computer unter ' +
+      '„Einstellungen → Importieren“. Spätere Änderungen kommen nicht automatisch mit – dann die Datei neu herunterladen.</p>' +
+      '<div class="knoepfe"><button type="submit" class="haupt">' + kalenderKnopf(n) + '</button>' +
+      '<button type="button" data-aktion="schliessen">Abbrechen</button></div></form>';
+  }
+  function kalenderKnopf(n) { return n === 1 ? '1 Termin herunterladen' : n + ' Termine herunterladen'; }
+
+  function icsEintrag(t) {
     var mitZeit = t.schichten.filter(function (s) { return s.von; });
-    var eintrag = { uid: t.id, titel: t.titel, ort: t.ort, info: (t.info ? t.info + '\n\n' : '') + seitenLink('t-' + t.id), tag: t.von, bisTag: t.bis };
+    var eintrag = { uid: t.id, titel: t.titel, ort: t.ort, info: (t.info ? t.info + '\n\n' : '') + seitenLink('t-' + t.id), tag: t.von, bisTag: t.bis, kategorie: t.kategorie };
     if (t.von === t.bis && t.uhrVon) {
       eintrag.von = t.uhrVon;
       eintrag.bis = t.uhrBis;
@@ -1515,7 +1547,7 @@
       var enden = mitZeit.map(function (s) { return s.bis; }).filter(Boolean).sort();
       eintrag.bis = enden[enden.length - 1] || '';
     }
-    icsHerunterladen([eintrag], dateiname(t.titel));
+    return eintrag;
   }
 
   function icsMeine() {
@@ -1826,6 +1858,10 @@
         }
         break;
 
+      case 'kalender':
+        oeffne({ art: 'kalender' }, 'form[data-form=kalender] input[name=ab]');
+        break;
+
       case 'extern-filter':
         z.externAus = !z.externAus;
         z.trotzdem = '';
@@ -1892,6 +1928,13 @@
         }
         render();
       });
+    } else if (art === 'kalender') {
+      var auswahl = kalenderAuswahl(w.ab || heute(), !!(f.elements.ohne_extern && f.elements.ohne_extern.checked));
+      if (!auswahl.length) { zeigeMeldung('Ab diesem Tag gibt es keine Termine.', true); return; }
+      icsHerunterladen(auswahl.map(icsEintrag), 'termine-ab-' + (w.ab || heute()) + '.ics');
+      z.offen = null;
+      render();
+      zeigeMeldung(kalenderKnopf(auswahl.length).replace('herunterladen', 'als Kalenderdatei gespeichert.'));
     } else if (art === 'termin') {
       w.id = id;
       // Häkchen „Direkt beim Termin eintragen“: Plätze (0 = beliebig) – ohne Häkchen leer
@@ -1962,6 +2005,16 @@
 
   document.addEventListener('click', klick);
   document.addEventListener('submit', absenden);
+  // Kalender-Formular: Anzahl auf dem Knopf beim Ändern von Datum oder Häkchen anpassen
+  function kalenderVorschau(ev) {
+    var f = ev.target && ev.target.form;
+    if (!f || f.getAttribute('data-form') !== 'kalender' || !z.sicht) return;
+    var ab = f.elements.ab.value || heute();
+    var n = kalenderAuswahl(ab, !!(f.elements.ohne_extern && f.elements.ohne_extern.checked)).length;
+    f.querySelector('button[type=submit]').textContent = kalenderKnopf(n);
+  }
+  document.addEventListener('input', kalenderVorschau);
+  document.addEventListener('change', kalenderVorschau);
 
   // =====================================================================
   // Navigation über den Anker in der Adresse (#termine, #aufgaben, #meine, #t-…, #a-…)
@@ -1979,9 +2032,11 @@
 
   window.addEventListener('hashchange', function () {
     ankerLesen();
+    var sprung = !!z.springeZu; // render() setzt springeZu zurück, daher vorher merken
     z.offen = z.offen && z.offen.art === 'login' ? z.offen : null;
     render();
-    if (!z.springeZu) window.scrollTo(0, Math.min(window.scrollY, document.getElementById('reiter').offsetTop));
+    // Nur beim Wechsel des Reiters nach oben, nicht beim Sprung zu einem Termin
+    if (!sprung) window.scrollTo(0, Math.min(window.scrollY, document.getElementById('reiter').offsetTop));
   });
 
   // Regelmäßig aktualisieren, solange niemand gerade etwas eingibt
