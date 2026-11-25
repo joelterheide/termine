@@ -26,9 +26,10 @@ window.HELFERLISTE = {
   },
 
   // Vorlagen, aus denen die Verwaltung Termine und Aufgaben auf einmal übernehmen kann
-  // (unten auf der Seite: „Termine aus Vorlage übernehmen“).
+  // (unten auf der Seite: „Termine aus Vorlage übernehmen“). Der Jahresplan enthält Regeln
+  // statt Daten – beim Übernehmen wählt man das Jahr, die Daten werden dafür ausgerechnet.
   vorlagen: [
-    { titel: 'Jahresplan Dez. 2026 – Dez. 2027', datei: 'vorlagen/jahresplan-2027.json' }
+    { titel: 'Jahresplan Januar bis Dezember', datei: 'vorlagen/jahresplan.json' }
   ],
 
   // Putzdienst in der Tabellenansicht: Die Gruppen sind reihum je einen Monat dran,

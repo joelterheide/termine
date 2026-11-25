@@ -1,81 +1,24 @@
 {
- "titel": "Jahresplan Dezember 2026 bis Dezember 2027",
- "beschreibung": "Übertragen aus der Jahresplanung 2026 (ab Erdmännchen → jetzt ab Pinguine), ergänzt aus der allgemeinen Planung 2025 und dem Konfi-Fahrplan 2026/27, dazu die SoLa-Teamplanung und die Weihnachts-MAK-Orga.",
+ "titel": "Jahresplan Januar bis Dezember",
+ "beschreibung": "Alle Termine eines Jahres als Regeln – die Daten werden für das gewählte Jahr ausgerechnet. Grundlage: Jahresplanung 2026 (ab Pinguine), allgemeine Planung, Konfi-Fahrplan, SoLa-Teamplanung.",
  "hinweise": [
-  "Grundlage ist die Jahresplanung 2026: jedes Datum 52 Wochen später, also am gleichen Wochentag (MAK sonntags 18 Uhr, Teestube mittwochs, Actiontage und Weihnachtsmak samstags). Dezember 2026 genau wie geplant.",
-  "„ab Erdmännchen“ ist jetzt „ab Pinguine“. „ab Polarwölfe“ und „ab Belugas“ sind geblieben.",
-  "Actiontage 2.1. (Winterferienprogramm), 24.4. und 9.10. – nicht in den Ferien, nicht während der Wiesn (18.9.–3.10.2027) und nicht am Aubinger Weinfest (voraussichtlich 25./26.6.2027).",
-  "LW I 19.–21.3. (nicht am 6. oder 13. März). LW II auf dem Ausweichtermin 18.–20.6. wegen des Weinfests.",
-  "Konfi-Fahrplan 2026/27 eingearbeitet: Kirche Kunterbunt 17.1., Konfi-Gottesdienst 31.1., Osternachtwache 27./28.3., Konfirmationen 8./9.5.; kein MAK am Tag der Exkursion (24.1.) und am Konfirmationssonntag; nichts auf LEGO-Tagen, KonfiSamstag und Konfi-Wochenende.",
-  "Aus 2025 nicht übernommen, weil 2026 nicht mehr im Plan oder einmalig: Brettspielnachmittag, Pack mas Tag, Mitarbeiterdank, Spieletag + Faschingsparty, Actiontage im Februar und Juli, Kirchweih-Jubiläum, Stadtteilwoche.",
-  "Vorläufig: Elternabend Sola (13.5.), Konfigrillen (14.5.) und Sommerlager (31.7.–13.8.)."
+  "Jedes Datum folgt einer Regel (z. B. „2. Sonntag im Januar“, „Karsamstag“, „Samstag nach der Wiesn“) – so bleiben die Wochentage gleich: MAK sonntags 18 Uhr, Teestube mittwochs, Actiontage und Weihnachtsmak samstags.",
+  "Liegt ein Termin in den Ferien, auf der Wiesn oder am Aubinger Weinfest, rückt er eine Woche weiter (steht dann dabei).",
+  "Die Schulferien kommen von openholidaysapi.org. Ohne sie wird das Sommerlager auf den ersten Samstag im August gelegt.",
+  "Kirche Kunterbunt, Konfi-Gottesdienst, Konfirmationen und Gemeindefest legt die Gemeinde fest – mit dem Konfi-Fahrplan abgleichen.",
+  "Die Fristen der SoLa-Aufgaben sind Vorschläge (z. B. Genehmigungen 4 Monate vor dem Sommerlager)."
  ],
  "termine": [
   {
-   "key": "adv26",
-   "titel": "Adventsmarkt + Nikolausaktion",
-   "datum": "2026-12-04",
-   "bis_datum": "2026-12-06",
-   "zeit": "",
-   "ort": "",
-   "info": "",
-   "plaetze": "",
-   "kategorie": "",
-   "zielgruppen": ""
-  },
-  {
-   "key": "abbau26",
-   "titel": "Abbau + MAK",
-   "datum": "2026-12-06",
-   "bis_datum": "",
-   "zeit": "15:00",
-   "ort": "",
-   "info": "Ca. 15 Uhr, nach dem Adventsmarkt.",
-   "plaetze": "0",
-   "kategorie": "",
-   "zielgruppen": "ab Pinguine, MAK"
-  },
-  {
-   "key": "wmak26",
-   "titel": "Weihnachtsmak",
-   "datum": "2026-12-19",
-   "bis_datum": "",
-   "zeit": "17:00",
-   "ort": "",
-   "info": "",
-   "plaetze": "",
-   "kategorie": "",
-   "zielgruppen": "ab Pinguine, MAK"
-  },
-  {
-   "key": "tee26",
-   "titel": "Letzte Teestube",
-   "datum": "2026-12-23",
-   "bis_datum": "",
-   "zeit": "20:00",
-   "ort": "",
-   "info": "",
-   "plaetze": "",
-   "kategorie": "",
-   "zielgruppen": "ab Pinguine"
-  },
-  {
-   "key": "mette26",
-   "titel": "Christmette",
-   "datum": "2026-12-24",
-   "bis_datum": "",
-   "zeit": "22:00",
-   "ort": "",
-   "info": "",
-   "plaetze": "",
-   "kategorie": "",
-   "zielgruppen": ""
-  },
-  {
    "key": "wfp_action",
    "titel": "Winterferienprogramm: Actiontag & Filmeübernachtung",
-   "datum": "2027-01-02",
-   "bis_datum": "2027-01-03",
+   "wann": {
+    "datum": "01-02",
+    "wt": "Sa",
+    "richtung": "ab",
+    "text": "erster Samstag ab dem 2. Januar"
+   },
+   "dauer": 2,
    "zeit": "10:00",
    "ort": "",
    "info": "",
@@ -86,8 +29,12 @@
   {
    "key": "wfp_lan",
    "titel": "Winterferienprogramm: LAN-Party & Übernachtung",
-   "datum": "2027-01-03",
-   "bis_datum": "2027-01-04",
+   "wann": {
+    "termin": "wfp_action",
+    "tage": 1,
+    "text": "Tag nach dem Actiontag"
+   },
+   "dauer": 2,
    "zeit": "",
    "ort": "",
    "info": "",
@@ -98,20 +45,30 @@
   {
    "key": "wfp_spiele",
    "titel": "Winterferienprogramm: Spieleabend",
-   "datum": "2027-01-05",
-   "bis_datum": "",
+   "wann": {
+    "termin": "wfp_action",
+    "tage": -1,
+    "text": "Tag vor dem Actiontag"
+   },
    "zeit": "",
    "ort": "",
    "info": "",
    "plaetze": "",
    "kategorie": "",
-   "zielgruppen": "ab Pinguine"
+   "zielgruppen": "ab Pinguine",
+   "ausweichen": [
+    "01-01",
+    "12-31"
+   ]
   },
   {
-   "key": "licht27",
+   "key": "licht",
    "titel": "Lichterandacht + MAK",
-   "datum": "2027-01-10",
-   "bis_datum": "",
+   "wann": {
+    "monat": 1,
+    "nr": 2,
+    "wt": "So"
+   },
    "zeit": "17:00",
    "ort": "",
    "info": "Treffpunkt 16:45 Uhr.",
@@ -120,13 +77,16 @@
    "zielgruppen": ""
   },
   {
-   "key": "kunt1",
+   "key": "kunterbunt",
    "titel": "Kirche Kunterbunt",
-   "datum": "2027-01-17",
-   "bis_datum": "",
+   "wann": {
+    "monat": 1,
+    "nr": 3,
+    "wt": "So"
+   },
    "zeit": "10:00",
    "ort": "",
-   "info": "Mit Präsentation der LEGO-Stadt (laut Konfi-Fahrplan).",
+   "info": "Termin der Gemeinde – mit dem Konfi-Fahrplan abgleichen.",
    "plaetze": "",
    "kategorie": "",
    "zielgruppen": ""
@@ -134,107 +94,155 @@
   {
    "key": "konfigd",
    "titel": "Allgm. Kirchgang (Konfi-Gottesdienst) + MAK",
-   "datum": "2027-01-31",
-   "bis_datum": "",
+   "wann": {
+    "monat": 1,
+    "nr": -1,
+    "wt": "So"
+   },
    "zeit": "10:00",
    "ort": "",
-   "info": "Datum laut Konfi-Fahrplan.",
+   "info": "Termin laut Konfi-Fahrplan prüfen.",
    "plaetze": "",
    "kategorie": "",
    "zielgruppen": ""
   },
   {
-   "key": "mak1",
+   "key": "mak_feb1",
    "titel": "MAK",
-   "datum": "2027-02-07",
-   "bis_datum": "",
+   "wann": {
+    "monat": 2,
+    "nr": 1,
+    "wt": "So"
+   },
    "zeit": "18:00",
    "ort": "",
    "info": "",
    "plaetze": "",
    "kategorie": "",
-   "zielgruppen": "ab Pinguine, MAK"
+   "zielgruppen": "ab Pinguine, MAK",
+   "ausweichen": [
+    "ferien"
+   ]
   },
   {
-   "key": "mak2",
+   "key": "mak_feb2",
    "titel": "MAK",
-   "datum": "2027-02-21",
-   "bis_datum": "",
+   "wann": {
+    "monat": 2,
+    "nr": 3,
+    "wt": "So"
+   },
    "zeit": "18:00",
    "ort": "",
    "info": "",
    "plaetze": "",
    "kategorie": "",
-   "zielgruppen": "ab Pinguine, MAK"
+   "zielgruppen": "ab Pinguine, MAK",
+   "ausweichen": [
+    "ferien"
+   ]
   },
   {
-   "key": "mak3",
+   "key": "mak_mar",
    "titel": "MAK",
-   "datum": "2027-03-07",
-   "bis_datum": "",
+   "wann": {
+    "monat": 3,
+    "nr": 1,
+    "wt": "So"
+   },
    "zeit": "18:00",
    "ort": "",
    "info": "",
    "plaetze": "",
    "kategorie": "",
-   "zielgruppen": "ab Pinguine, MAK"
+   "zielgruppen": "ab Pinguine, MAK",
+   "ausweichen": [
+    "ferien"
+   ]
   },
   {
-   "key": "lwe1",
+   "key": "lw1",
    "titel": "Leiterwochenende I",
-   "datum": "2027-03-19",
-   "bis_datum": "2027-03-21",
+   "wann": {
+    "monat": 3,
+    "nr": 3,
+    "wt": "Fr"
+   },
+   "dauer": 3,
    "zeit": "",
    "ort": "",
    "info": "",
    "plaetze": "",
    "kategorie": "",
-   "zielgruppen": "Leiter"
+   "zielgruppen": "Leiter",
+   "ausweichen": [
+    "ferien"
+   ],
+   "schritt": -7
   },
   {
    "key": "ostern",
    "titel": "Osternachtwache",
-   "datum": "2027-03-27",
-   "bis_datum": "2027-03-28",
+   "wann": {
+    "ostern": -1
+   },
+   "dauer": 2,
    "zeit": "17:00-07:30",
    "ort": "",
-   "info": "Jugendübernachtung im Gemeindehaus, endet nach dem Osternachtgottesdienst um 6 Uhr (Zeitumstellung!). Die Konfis sind laut Konfi-Fahrplan auch dabei.",
+   "info": "Jugendübernachtung im Gemeindehaus, endet nach dem Osternachtgottesdienst um 6 Uhr. Die Konfis sind auch dabei.",
    "plaetze": "",
    "kategorie": "",
    "zielgruppen": "ab Pinguine"
   },
   {
-   "key": "mak4",
+   "key": "mak_apr",
    "titel": "MAK",
-   "datum": "2027-04-11",
-   "bis_datum": "",
+   "wann": {
+    "monat": 4,
+    "nr": 2,
+    "wt": "So"
+   },
    "zeit": "18:00",
    "ort": "",
    "info": "",
    "plaetze": "",
    "kategorie": "",
-   "zielgruppen": "ab Pinguine, MAK"
+   "zielgruppen": "ab Pinguine, MAK",
+   "ausweichen": [
+    "ferien",
+    "termin:ostern"
+   ]
   },
   {
    "key": "action1",
    "titel": "Actiontag + MAK",
-   "datum": "2027-04-24",
-   "bis_datum": "",
+   "wann": {
+    "monat": 4,
+    "nr": -1,
+    "wt": "Sa"
+   },
    "zeit": "10:00",
    "ort": "",
    "info": "",
    "plaetze": "",
    "kategorie": "",
-   "zielgruppen": "ab Pinguine, MAK"
+   "zielgruppen": "ab Pinguine, MAK",
+   "ausweichen": [
+    "ferien"
+   ]
   },
   {
    "key": "konfirmation",
    "titel": "Konfirmationen",
-   "datum": "2027-05-08",
-   "bis_datum": "2027-05-09",
+   "wann": {
+    "monat": 5,
+    "nr": 2,
+    "wt": "Sa"
+   },
+   "dauer": 2,
    "zeit": "",
    "ort": "",
-   "info": "Festgottesdienste laut Konfi-Fahrplan: Sa 11:00 und 15:00, So 10:00.",
+   "info": "Termine laut Konfi-Fahrplan prüfen.",
    "plaetze": "",
    "kategorie": "Jugend extern",
    "zielgruppen": ""
@@ -242,11 +250,15 @@
   {
    "key": "elternabend",
    "titel": "Elternabend Sola",
-   "datum": "2027-05-13",
-   "bis_datum": "",
+   "wann": {
+    "ostern": 49,
+    "wt": "Do",
+    "richtung": "vor",
+    "text": "Donnerstag vor Pfingsten"
+   },
    "zeit": "19:30",
    "ort": "",
-   "info": "Vorläufig – 2026 war er am Donnerstag oder Freitag vor den Pfingstferien.",
+   "info": "Vor den Pfingstferien.",
    "plaetze": "",
    "kategorie": "",
    "zielgruppen": "Eltern, Team SoLa"
@@ -254,71 +266,104 @@
   {
    "key": "konfigrillen",
    "titel": "Konfigrillen",
-   "datum": "2027-05-14",
-   "bis_datum": "",
+   "wann": {
+    "termin": "konfirmation",
+    "tage": 6,
+    "text": "Freitag nach den Konfirmationen"
+   },
    "zeit": "19:00",
    "ort": "",
-   "info": "Im Konfi-Fahrplan noch ohne Termin – mit dem Konfi-Team abstimmen. 2026 war es der Freitag nach den Konfirmationen.",
+   "info": "Mit dem Konfi-Team abstimmen.",
    "plaetze": "0",
    "kategorie": "",
    "zielgruppen": "ab Pinguine"
   },
   {
-   "key": "mak5",
+   "key": "mak_pfingsten",
    "titel": "MAK",
-   "datum": "2027-05-16",
-   "bis_datum": "",
+   "wann": {
+    "ostern": 49
+   },
    "zeit": "18:00",
    "ort": "",
    "info": "",
    "plaetze": "",
    "kategorie": "",
-   "zielgruppen": "ab Pinguine, MAK"
+   "zielgruppen": "ab Pinguine, MAK",
+   "ausweichen": [
+    "termin:konfirmation"
+   ]
   },
   {
-   "key": "mak6",
+   "key": "mak_jun",
    "titel": "MAK",
-   "datum": "2027-06-06",
-   "bis_datum": "",
+   "wann": {
+    "monat": 6,
+    "nr": 1,
+    "wt": "So"
+   },
    "zeit": "18:00",
    "ort": "",
    "info": "",
    "plaetze": "",
    "kategorie": "",
-   "zielgruppen": "ab Pinguine, MAK"
+   "zielgruppen": "ab Pinguine, MAK",
+   "ausweichen": [
+    "ferien"
+   ]
   },
   {
    "key": "jwe1",
    "titel": "Jugendwochenende",
-   "datum": "2027-06-11",
-   "bis_datum": "2027-06-13",
+   "wann": {
+    "monat": 6,
+    "nr": 2,
+    "wt": "Fr"
+   },
+   "dauer": 3,
    "zeit": "",
    "ort": "",
    "info": "",
    "plaetze": "",
    "kategorie": "",
-   "zielgruppen": "ab Polarwölfe"
+   "zielgruppen": "ab Polarwölfe",
+   "ausweichen": [
+    "ferien",
+    "weinfest"
+   ]
   },
   {
-   "key": "lwe2",
+   "key": "lw2",
    "titel": "Leiterwochenende II",
-   "datum": "2027-06-18",
-   "bis_datum": "2027-06-20",
+   "wann": {
+    "monat": 6,
+    "nr": 3,
+    "wt": "Fr"
+   },
+   "dauer": 3,
    "zeit": "",
    "ort": "",
-   "info": "Der Ausweichtermin aus der Planung 2026 – am letzten Juni-Wochenende ist das Aubinger Weinfest.",
+   "info": "Nicht am letzten Juni-Wochenende – da ist das Aubinger Weinfest.",
    "plaetze": "",
    "kategorie": "",
-   "zielgruppen": "Schwarzhalstüchler, Leiter"
+   "zielgruppen": "Schwarzhalstüchler, Leiter",
+   "ausweichen": [
+    "ferien",
+    "weinfest",
+    "termin:jwe1"
+   ]
   },
   {
    "key": "gemeindefest",
    "titel": "Gemeindefest",
-   "datum": "2027-06-27",
-   "bis_datum": "",
+   "wann": {
+    "monat": 6,
+    "nr": -1,
+    "wt": "So"
+   },
    "zeit": "",
    "ort": "",
-   "info": "",
+   "info": "Termin der Gemeinde – bitte prüfen.",
    "plaetze": "",
    "kategorie": "",
    "zielgruppen": ""
@@ -326,8 +371,11 @@
   {
    "key": "jf1",
    "titel": "Sommerjahresfeier",
-   "datum": "2027-07-10",
-   "bis_datum": "",
+   "wann": {
+    "monat": 7,
+    "nr": 2,
+    "wt": "Sa"
+   },
    "zeit": "16:00",
    "ort": "",
    "info": "Aufbau 14:30 Uhr, Beginn 16 Uhr.",
@@ -338,8 +386,10 @@
   {
    "key": "auf1",
    "titel": "Aufräumen + MAK",
-   "datum": "2027-07-11",
-   "bis_datum": "",
+   "wann": {
+    "termin": "jf1",
+    "tage": 1
+   },
    "zeit": "12:00",
    "ort": "",
    "info": "",
@@ -348,10 +398,35 @@
    "zielgruppen": "ab Pinguine, MAK"
   },
   {
+   "key": "sola",
+   "titel": "Sommerlager",
+   "wann": {
+    "ferien": "sommer",
+    "rand": "beginn",
+    "wt": "Sa",
+    "richtung": "um",
+    "text": "Samstag um den Beginn der Sommerferien",
+    "sonst": {
+     "monat": 8,
+     "nr": 1,
+     "wt": "Sa"
+    }
+   },
+   "dauer": 14,
+   "zeit": "",
+   "ort": "",
+   "info": "Vorläufig.",
+   "plaetze": "",
+   "kategorie": "",
+   "zielgruppen": "ab Belugas"
+  },
+  {
    "key": "abschied",
    "titel": "Sola-Abschiedsgottesdienst + Vortrupp-Treffen",
-   "datum": "2027-07-25",
-   "bis_datum": "",
+   "wann": {
+    "termin": "sola",
+    "tage": -6
+   },
    "zeit": "10:00",
    "ort": "",
    "info": "",
@@ -362,8 +437,11 @@
   {
    "key": "vortrupp",
    "titel": "Vortrupp",
-   "datum": "2027-07-27",
-   "bis_datum": "2027-07-31",
+   "wann": {
+    "termin": "sola",
+    "tage": -4
+   },
+   "dauer": 5,
    "zeit": "",
    "ort": "",
    "info": "",
@@ -374,8 +452,10 @@
   {
    "key": "gepaeck",
    "titel": "Gepäckabgabe",
-   "datum": "2027-07-29",
-   "bis_datum": "",
+   "wann": {
+    "termin": "sola",
+    "tage": -2
+   },
    "zeit": "18-20",
    "ort": "",
    "info": "",
@@ -384,22 +464,11 @@
    "zielgruppen": "ab Belugas, Eltern"
   },
   {
-   "key": "sola",
-   "titel": "Sommerlager",
-   "datum": "2027-07-31",
-   "bis_datum": "2027-08-13",
-   "zeit": "",
-   "ort": "",
-   "info": "Vorläufig: wie 2026 vom Samstag vor den Ferien an zwei Wochen.",
-   "plaetze": "",
-   "kategorie": "",
-   "zielgruppen": "ab Belugas"
-  },
-  {
    "key": "waisen",
    "titel": "Waisentreffen",
-   "datum": "2027-07-31",
-   "bis_datum": "",
+   "wann": {
+    "termin": "sola"
+   },
    "zeit": "",
    "ort": "",
    "info": "Nach der Abfahrt.",
@@ -410,8 +479,10 @@
   {
    "key": "besuch",
    "titel": "Elternbesuchstag",
-   "datum": "2027-08-08",
-   "bis_datum": "",
+   "wann": {
+    "termin": "sola",
+    "tage": 8
+   },
    "zeit": "",
    "ort": "",
    "info": "",
@@ -422,8 +493,10 @@
   {
    "key": "nachessen",
    "titel": "Nachessen",
-   "datum": "2027-08-14",
-   "bis_datum": "",
+   "wann": {
+    "termin": "sola",
+    "tage": 14
+   },
    "zeit": "18:00",
    "ort": "",
    "info": "",
@@ -432,10 +505,19 @@
    "zielgruppen": "ab Belugas"
   },
   {
-   "key": "mak7",
+   "key": "mak_sep",
    "titel": "MAK",
-   "datum": "2027-09-19",
-   "bis_datum": "",
+   "wann": {
+    "ferien": "sommer",
+    "rand": "ende",
+    "wt": "So",
+    "richtung": "nach",
+    "sonst": {
+     "monat": 9,
+     "nr": 3,
+     "wt": "So"
+    }
+   },
    "zeit": "18:00",
    "ort": "",
    "info": "",
@@ -446,32 +528,55 @@
   {
    "key": "action2",
    "titel": "Actiontag + MAK",
-   "datum": "2027-10-09",
-   "bis_datum": "",
+   "wann": {
+    "wiesn": "ende",
+    "wt": "Sa",
+    "richtung": "nach"
+   },
    "zeit": "10:00",
    "ort": "",
-   "info": "Erster Samstag nach der Wiesn.",
+   "info": "",
    "plaetze": "",
    "kategorie": "",
-   "zielgruppen": "ab Pinguine, MAK"
+   "zielgruppen": "ab Pinguine, MAK",
+   "ausweichen": [
+    "ferien"
+   ]
   },
   {
-   "key": "lwe3",
+   "key": "lw3",
    "titel": "Leiterwochenende III",
-   "datum": "2027-10-15",
-   "bis_datum": "2027-10-17",
+   "wann": {
+    "monat": 10,
+    "nr": 3,
+    "wt": "Fr"
+   },
+   "dauer": 3,
    "zeit": "",
    "ort": "",
    "info": "",
    "plaetze": "",
    "kategorie": "",
-   "zielgruppen": "Leiter"
+   "zielgruppen": "Leiter",
+   "ausweichen": [
+    "ferien",
+    "termin:action2"
+   ]
   },
   {
-   "key": "mak8",
+   "key": "mak_nov",
    "titel": "MAK",
-   "datum": "2027-11-07",
-   "bis_datum": "",
+   "wann": {
+    "ferien": "herbst",
+    "rand": "ende",
+    "wt": "So",
+    "richtung": "nach",
+    "sonst": {
+     "monat": 11,
+     "nr": 1,
+     "wt": "So"
+    }
+   },
    "zeit": "18:00",
    "ort": "",
    "info": "",
@@ -482,20 +587,32 @@
   {
    "key": "jwe2",
    "titel": "Jugendwochenende",
-   "datum": "2027-11-12",
-   "bis_datum": "2027-11-14",
+   "wann": {
+    "monat": 11,
+    "nr": 2,
+    "wt": "Fr"
+   },
+   "dauer": 3,
    "zeit": "",
    "ort": "",
    "info": "",
    "plaetze": "",
    "kategorie": "",
-   "zielgruppen": "ab Polarwölfe"
+   "zielgruppen": "ab Polarwölfe",
+   "ausweichen": [
+    "ferien"
+   ]
   },
   {
    "key": "jf2",
    "titel": "Jahresfeier",
-   "datum": "2027-11-20",
-   "bis_datum": "",
+   "wann": {
+    "advent": 1,
+    "tage": -7,
+    "wt": "Sa",
+    "richtung": "vor",
+    "text": "Samstag vor dem Ewigkeitssonntag"
+   },
    "zeit": "16:00",
    "ort": "",
    "info": "Aufbau 14:30 Uhr, Beginn 16 Uhr.",
@@ -506,8 +623,10 @@
   {
    "key": "auf2",
    "titel": "Aufräumen + MAK",
-   "datum": "2027-11-21",
-   "bis_datum": "",
+   "wann": {
+    "termin": "jf2",
+    "tage": 1
+   },
    "zeit": "12:00",
    "ort": "",
    "info": "",
@@ -516,10 +635,14 @@
    "zielgruppen": "ab Pinguine, MAK"
   },
   {
-   "key": "adv27",
+   "key": "advent",
    "titel": "Adventsmarkt + Nikolausaktion",
-   "datum": "2027-12-03",
-   "bis_datum": "2027-12-05",
+   "wann": {
+    "advent": 2,
+    "wt": "Fr",
+    "richtung": "vor"
+   },
+   "dauer": 3,
    "zeit": "",
    "ort": "",
    "info": "",
@@ -528,10 +651,11 @@
    "zielgruppen": ""
   },
   {
-   "key": "abbau27",
+   "key": "abbau",
    "titel": "Abbau + MAK",
-   "datum": "2027-12-05",
-   "bis_datum": "",
+   "wann": {
+    "advent": 2
+   },
    "zeit": "15:00",
    "ort": "",
    "info": "Ca. 15 Uhr, nach dem Adventsmarkt.",
@@ -540,10 +664,13 @@
    "zielgruppen": "ab Pinguine, MAK"
   },
   {
-   "key": "wmak27",
+   "key": "wmak",
    "titel": "Weihnachtsmak",
-   "datum": "2027-12-18",
-   "bis_datum": "",
+   "wann": {
+    "advent": 4,
+    "wt": "Sa",
+    "richtung": "vor"
+   },
    "zeit": "17:00",
    "ort": "",
    "info": "",
@@ -552,10 +679,13 @@
    "zielgruppen": "ab Pinguine, MAK"
   },
   {
-   "key": "tee27",
+   "key": "teestube",
    "titel": "Letzte Teestube",
-   "datum": "2027-12-22",
-   "bis_datum": "",
+   "wann": {
+    "datum": "12-24",
+    "wt": "Mi",
+    "richtung": "vor"
+   },
    "zeit": "20:00",
    "ort": "",
    "info": "",
@@ -564,10 +694,11 @@
    "zielgruppen": "ab Pinguine"
   },
   {
-   "key": "mette27",
+   "key": "mette",
    "titel": "Christmette",
-   "datum": "2027-12-24",
-   "bis_datum": "",
+   "wann": {
+    "datum": "12-24"
+   },
    "zeit": "22:00",
    "ort": "",
    "info": "",
@@ -580,7 +711,7 @@
   {
    "titel": "Weihnachts-MAK organisieren",
    "zielgruppen": "MAK",
-   "termin": "wmak26",
+   "termin": "wmak",
    "info": "",
    "unter": [
     "Einladung an alle Mitarbeitenden schicken",
@@ -594,7 +725,11 @@
    "titel": "SoLa: Dokumente und Genehmigungen",
    "zielgruppen": "Team SoLa",
    "termin": "sola",
-   "info": "Aus der Teamvorbereitung SoLa 2026 übernommen.",
+   "frist": {
+    "termin": "sola",
+    "tage": -120
+   },
+   "info": "",
    "unter": [
     "Genehmigung Landratsamt (nötig?)",
     "Feuergenehmigung (Amt für Ernährung & Forst)",
@@ -607,6 +742,10 @@
    "titel": "SoLa: Absprachen mit dem Bauern",
    "zielgruppen": "Team SoLa",
    "termin": "sola",
+   "frist": {
+    "termin": "sola",
+    "tage": -90
+   },
    "info": "",
    "unter": [
     "Grundinfos: Teilnehmer, Ablauf, Dauer",
@@ -628,6 +767,10 @@
    "titel": "SoLa: Elternabend und Anmeldung",
    "zielgruppen": "Team SoLa",
    "termin": "elternabend",
+   "frist": {
+    "termin": "elternabend",
+    "tage": -7
+   },
    "info": "",
    "unter": [
     "Elternabend vorbereiten",
@@ -639,6 +782,10 @@
    "titel": "SoLa: Telefonate",
    "zielgruppen": "Team SoLa",
    "termin": "sola",
+   "frist": {
+    "termin": "sola",
+    "tage": -60
+   },
    "info": "",
    "unter": [
     "Jäger anrufen",
@@ -656,6 +803,10 @@
    "titel": "SoLa: Dixis bestellen",
    "zielgruppen": "Team SoLa",
    "termin": "sola",
+   "frist": {
+    "termin": "sola",
+    "tage": -42
+   },
    "info": "",
    "unter": []
   },
@@ -663,6 +814,10 @@
    "titel": "SoLa: Bus anfragen",
    "zielgruppen": "Team SoLa",
    "termin": "sola",
+   "frist": {
+    "termin": "sola",
+    "tage": -90
+   },
    "info": "",
    "unter": []
   },
@@ -670,6 +825,10 @@
    "titel": "SoLa: Sprinter/LKW",
    "zielgruppen": "Team SoLa",
    "termin": "sola",
+   "frist": {
+    "termin": "sola",
+    "tage": -60
+   },
    "info": "",
    "unter": [
     "Fahrer suchen",
@@ -682,6 +841,10 @@
    "titel": "SoLa: Einkaufen",
    "zielgruppen": "Team SoLa",
    "termin": "sola",
+   "frist": {
+    "termin": "sola",
+    "tage": -14
+   },
    "info": "",
    "unter": [
     "Halstücher",

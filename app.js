@@ -93,7 +93,9 @@
     trotzdem: '',         // ausgeblendeter Termin/Aufgabe/Abstimmung, der per Link geöffnet wurde
     profil: leseProfil(), // für wen der Jahresplan angezeigt wird
     vorlage: null,        // geladene Vorlage zum Übernehmen von Terminen (Verwaltung)
-    teamAufgaben: {}      // Verwaltung: beim Termin aufgeklappte Team-Aufgaben (id → true)
+    teamAufgaben: {},     // Verwaltung: beim Termin aufgeklappte Team-Aufgaben (id → true)
+    vorlageJahr: new Date().getMonth() >= 9 ? new Date().getFullYear() + 1 : new Date().getFullYear(),
+    jahresFerien: {}      // Schulferien je Jahr für Vorlagen mit Regeln
   };
 
   function setzeProfil(liste) {
@@ -773,6 +775,37 @@
     return j + '-' + zz(m + 1);
   }
 
+  function ferienAusApi(daten) {
+    return (Array.isArray(daten) ? daten : []).map(function (f) {
+      var namen = f.name || [];
+      var de = namen.filter(function (n) { return n.language === 'DE'; })[0] || namen[0] || {};
+      return { von: f.startDate, bis: f.endDate, name: de.text || 'Ferien' };
+    }).filter(function (f) { return alsDatum(f.von) && alsDatum(f.bis); });
+  }
+
+  // Schulferien rund um ein ganzes Jahr (für Vorlagen mit Regeln), 30 Tage im Browser gemerkt
+  function ladeJahresFerien(jahr) {
+    if (z.jahresFerien[jahr]) return;
+    var land = String(KONF.ferien || '').toUpperCase();
+    if (!BUNDESLAND[land]) { z.jahresFerien[jahr] = { liste: null, fehler: true, keinLand: true }; return; }
+    var schluessel = 'helferliste.ferien.' + land + '.' + jahr;
+    try {
+      var c = JSON.parse(lies('localStorage', schluessel) || 'null');
+      if (c && Array.isArray(c.liste) && Date.now() - c.zeit < 30 * 86400000) { z.jahresFerien[jahr] = { liste: c.liste }; return; }
+    } catch (e) { /* neu laden */ }
+    z.jahresFerien[jahr] = { laedt: true };
+    fetch('https://openholidaysapi.org/SchoolHolidays?countryIsoCode=DE&subdivisionCode=DE-' + land +
+      '&languageIsoCode=DE&validFrom=' + (jahr - 1) + '-12-01&validTo=' + (jahr + 1) + '-01-31')
+      .then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
+      .then(function (daten) {
+        var liste = ferienAusApi(daten);
+        z.jahresFerien[jahr] = { liste: liste };
+        merke('localStorage', schluessel, JSON.stringify({ zeit: Date.now(), liste: liste }));
+        render();
+      })
+      .catch(function () { z.jahresFerien[jahr] = { liste: null, fehler: true }; render(); });
+  }
+
   // Schulferien von openholidaysapi.org (offen, ohne Schlüssel), eine Woche im Browser gemerkt
   function ladeFerien() {
     var land = String(KONF.ferien || '').toUpperCase();
@@ -791,11 +824,7 @@
       '&languageIsoCode=DE&validFrom=' + von + '&validTo=' + bis)
       .then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
       .then(function (daten) {
-        ferien.liste = (Array.isArray(daten) ? daten : []).map(function (f) {
-          var namen = f.name || [];
-          var de = namen.filter(function (n) { return n.language === 'DE'; })[0] || namen[0] || {};
-          return { von: f.startDate, bis: f.endDate, name: de.text || 'Ferien' };
-        }).filter(function (f) { return alsDatum(f.von) && alsDatum(f.bis); });
+        ferien.liste = ferienAusApi(daten);
         ferien.laedt = false; ferien.geladen = true; ferien.fehler = false;
         merke('localStorage', schluessel, JSON.stringify({ von: von, bis: bis, zeit: Date.now(), liste: ferien.liste }));
         if (z.ansicht === 'tabelle') render();
@@ -1227,8 +1256,10 @@
     var erledigt = erledigteAufgaben();
     var abgelaufen = z.sicht.aufgaben.filter(istAbgelaufen).filter(aufgabeSichtbar);
     if (z.springeZu && abgelaufen.some(function (g) { return 'a-' + g.id === z.springeZu; })) z.vergangene = true;
-    var h = alsHtml() + '<div class="leiste"><span class="leise">Aufgaben zum Mithelfen</span>' +
-      (admin() ? '<button data-aktion="aufgabe-neu">+ Neue Aufgabe</button>' : '') + '</div>';
+    var h = alsHtml() + '<div class="leiste"><span>' +
+      (liste.length || meineOffenenAufgaben().length ? '<button class="link" data-aktion="erinnerungen">Als Erinnerungen in den Kalender</button>' : '<span class="leise">Aufgaben zum Mithelfen</span>') +
+      '</span>' + (admin() ? '<button data-aktion="aufgabe-neu">+ Neue Aufgabe</button>' : '') + '</div>';
+    if (istOffen('erinnerungen')) h += erinnerungenFormular();
     if (istOffen('aufgabe', '')) h += aufgabeFormular(null);
     if (!liste.length) h += '<p class="leer">Gerade keine offenen Aufgaben.</p>';
     liste.forEach(function (g) { h += aufgabeHtml(g); });
@@ -1292,12 +1323,14 @@
         (g.unter.length ? 'Ganze Aufgabe erledigt' : 'erledigt') + '</label>' +
         (g.erledigt ? ' <span class="leise">' + esc(erledigtText(g)) + '</span>' : ''));
     }
+    if (!vorbei && !g.fertig) links.push('<button class="link" data-aktion="erinnerung" data-id="' + esc(g.id) + '">Erinnerung</button>');
     if (admin()) {
       links.push('<button class="link" data-aktion="unter-neu" data-id="' + esc(g.id) + '">+ Unteraufgaben</button>');
       links.push('<button class="link" data-aktion="aufgabe-bearbeiten" data-id="' + esc(g.id) + '">Bearbeiten</button>');
       links.push('<button class="link" data-aktion="aufgabe-loeschen" data-id="' + esc(g.id) + '">Löschen</button>');
     }
     if (links.length) h += '<div class="t-links">' + links.join('<span class="trenn"> · </span>') + '</div>';
+    if (istOffen('erinnerung', g.id)) h += erinnerungFormular(g);
     return h + '</section>';
   }
 
@@ -1372,9 +1405,10 @@
         '<span><button class="link" data-aktion="austragen" data-id="' + esc(m.e.id) + '">absagen</button></span></li>';
     });
     h += '</ul>';
-    if (liste.some(function (m) { return m.termin; })) {
-      h += '<p class="t-links"><button class="link" data-aktion="ics-meine">Meine Termine in den Kalender übernehmen</button></p>';
-    }
+    var links = [];
+    if (liste.some(function (m) { return m.termin; })) links.push('<button class="link" data-aktion="ics-meine">Meine Termine in den Kalender übernehmen</button>');
+    if (meineOffenenAufgaben().length) links.push('<button class="link" data-aktion="erinnerungen-meine">Meine Aufgaben als Erinnerungen</button>');
+    if (links.length) h += '<p class="t-links">' + links.join('<span class="trenn"> · </span>') + '</p>';
     return h;
   }
 
@@ -1776,6 +1810,7 @@
       if (e.ort) z2.push('LOCATION:' + icsText(e.ort));
       if (e.info) z2.push('DESCRIPTION:' + icsText(e.info));
       if (e.kategorie) z2.push('CATEGORIES:' + icsText(e.kategorie));
+      if (e.erinnerung) z2.push('BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:' + icsText(e.titel), 'TRIGGER:PT0M', 'END:VALARM');
       z2.push('END:VEVENT');
     });
     z2.push('END:VCALENDAR');
@@ -1824,13 +1859,33 @@
     return (Array.isArray(KONF.vorlagen) ? KONF.vorlagen : []).filter(function (v) { return v && v.datei; });
   }
 
+  // Regel-Rechner für Vorlagen (jahresregeln.js) erst bei Bedarf laden
+  var regelnLaden = null;
+  function ladeRegeln() {
+    if (window.Jahresregeln) return Promise.resolve(window.Jahresregeln);
+    if (!regelnLaden) {
+      regelnLaden = new Promise(function (fertig, fehler) {
+        var s = document.createElement('script');
+        s.src = 'jahresregeln.js?v=1';
+        s.onload = function () { fertig(window.Jahresregeln); };
+        s.onerror = function () { regelnLaden = null; fehler(new Error('jahresregeln.js nicht gefunden.')); };
+        document.head.appendChild(s);
+      });
+    }
+    return regelnLaden;
+  }
+
   function ladeVorlage(datei) {
     if (z.vorlage && z.vorlage.datei === datei && !z.vorlage.fehler) return;
     z.vorlage = { datei: datei, laden: true };
-    fetch(datei, { cache: 'no-cache' })
-      .then(function (r) { if (!r.ok) throw new Error('Datei ' + datei + ' nicht gefunden.'); return r.json(); })
-      .then(function (d) {
+    Promise.all([
+      fetch(datei, { cache: 'no-cache' }).then(function (r) { if (!r.ok) throw new Error('Datei ' + datei + ' nicht gefunden.'); return r.json(); }),
+      ladeRegeln()
+    ])
+      .then(function (erg) {
+        var d = erg[0];
         if (!z.vorlage || z.vorlage.datei !== datei) return;
+        if (window.Jahresregeln.mitRegeln(d)) ladeJahresFerien(z.vorlageJahr);
         z.vorlage = { datei: datei, daten: { titel: d.titel || '', beschreibung: d.beschreibung || '', hinweise: d.hinweise || [],
           termine: Array.isArray(d.termine) ? d.termine : [], aufgaben: Array.isArray(d.aufgaben) ? d.aufgaben : [] } };
         render();
@@ -1858,6 +1913,25 @@
   function aufgabeSchonDa(g) {
     var k = titelKern(g.titel);
     return z.daten.Aufgaben.some(function (a) { return !a.eltern_id && !a.erledigt && titelKern(a.titel) === k; });
+  }
+
+  // Vorlage mit festen Daten so, wie sie ist – mit Regeln für das gewählte Jahr ausgerechnet
+  function vorlageDaten() {
+    var v = z.vorlage;
+    if (!v || !v.daten) return null;
+    var d = v.daten;
+    if (!window.Jahresregeln || !window.Jahresregeln.mitRegeln(d)) return Object.assign({ mitJahr: false }, d);
+    var jahr = z.vorlageJahr;
+    var f = z.jahresFerien[jahr] || { laedt: true };
+    var e = window.Jahresregeln.berechne(d, jahr, f.liste || null);
+    var termine = e.termine.filter(function (t) { return t.datum; }).sort(function (a, b) {
+      return a.datum < b.datum ? -1 : a.datum > b.datum ? 1 : (a.zeit || '') < (b.zeit || '') ? -1 : 1;
+    });
+    return {
+      titel: d.titel, beschreibung: d.beschreibung, hinweise: d.hinweise, termine: termine, aufgaben: e.aufgaben,
+      mitJahr: true, jahr: jahr, ferienLaedt: !!f.laedt, ohneFerien: !f.laedt && e.ohneFerien, keinLand: !!f.keinLand,
+      fehler: e.fehler, ohneDatum: e.termine.filter(function (t) { return !t.datum; })
+    };
   }
 
   // Zustand jeder Zeile der Vorlage: vorbei, schon da oder neu
@@ -1924,7 +1998,7 @@
     var liste = vorlagenListe();
     var datei = (z.vorlage && z.vorlage.datei) || (liste[0] || {}).datei || '';
     // data-id: je Vorlage eigene Häkchen beim Neuzeichnen
-    var h = '<form class="kasten import" data-form="import" data-id="' + esc(datei) + '"><h3>Termine aus einer Vorlage übernehmen</h3>';
+    var h = '<form class="kasten import" data-form="import" data-id="' + esc(datei + '|' + z.vorlageJahr) + '"><h3>Termine aus einer Vorlage übernehmen</h3>';
     if (!liste.length) {
       return h + '<p class="tipp">In config.js ist keine Vorlage eingetragen (vorlagen).</p>' +
         '<div class="knoepfe"><button type="button" data-aktion="schliessen">Schließen</button></div></form>';
@@ -1941,7 +2015,18 @@
     if (v.fehler) {
       return h + '<p class="warnung">' + esc(v.fehler) + '</p><div class="knoepfe"><button type="button" data-aktion="schliessen">Schließen</button></div></form>';
     }
-    var d = v.daten;
+    var d = vorlageDaten();
+    if (d.mitJahr) {
+      var j0 = new Date().getFullYear();
+      var jahre = [j0, j0 + 1, j0 + 2, j0 + 3];
+      if (jahre.indexOf(d.jahr) < 0) jahre.push(d.jahr);
+      h += '<label class="jahr-wahl">Für das Jahr <select name="jahr">' + jahre.map(function (j) {
+        return '<option value="' + j + '"' + (j === d.jahr ? ' selected' : '') + '>' + j + '</option>';
+      }).join('') + '</select></label>';
+      if (d.ferienLaedt) {
+        return h + '<p class="leer">Lade die Schulferien für ' + d.jahr + ' …</p><div class="knoepfe"><button type="button" data-aktion="schliessen">Abbrechen</button></div></form>';
+      }
+    }
     var st = vorlageStand(d);
     h += (d.titel ? '<p><strong>' + esc(d.titel) + '</strong>' + (d.beschreibung ? '<br><span class="leise">' + esc(d.beschreibung) + '</span>' : '') + '</p>' : '');
     if (d.hinweise.length) {
@@ -1949,8 +2034,15 @@
         d.hinweise.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></details>';
     }
     h += vorlageGruppenHtml(d);
+    if (d.mitJahr && d.ohneFerien) {
+      h += '<p class="warnung">' + (d.keinLand ? 'In config.js ist kein Bundesland für die Schulferien eingetragen' : 'Die Schulferien konnten nicht geladen werden') +
+        ' – die Termine sind ohne Ferienprüfung ausgerechnet, das Sommerlager liegt auf dem ersten Samstag im August.</p>';
+    }
+    if (d.mitJahr && (d.fehler.length || d.ohneDatum.length)) {
+      h += '<p class="warnung">' + esc(d.fehler.concat(d.ohneDatum.map(function (t) { return '„' + t.titel + '“: ' + (t.warnung || 'kein Datum'); })).join(' · ')) + '</p>';
+    }
     h += veraltetHinweis(6, 'Der Import wird');
-    h += '<p class="tipp">Häkchen weg bei allem, was nicht übernommen werden soll. Was schon im Jahresplan steht, ist abgewählt. ' +
+    h += '<p class="tipp">Häkchen weg bei allem, was nicht übernommen werden soll. Was schon im Jahresplan steht oder schon vorbei ist, ist abgewählt. ' +
       'Alles lässt sich danach wie gewohnt bearbeiten.</p>';
 
     // Termine, nach Monaten
@@ -1971,11 +2063,15 @@
       var zeit = String(t.zeit || '').replace(/\s*-\s*/, '–');
       var stand = x.da ? '<span class="etikett">schon im Plan' + (x.da.titel !== t.titel ? ': „' + esc(x.da.titel) + '“' : '') + '</span>'
         : x.vorbei ? '<span class="etikett">vorbei</span>' : '';
+      var regel = t.regel ? '<div class="leise klein regel">' + esc(t.regel) +
+        (t.verschoben ? ' · <span class="verschoben">verschoben wegen ' + esc(t.verschoben) + '</span>' : '') +
+        (t.ersatz ? ' · ohne Ferien geschätzt' : '') + '</div>' : '';
       h += '<tr' + (x.vorwahl ? '' : ' class="leise"') + '><td class="haken"><input type="checkbox" name="nimm" value="t' + i + '"' +
         (x.vorwahl ? ' checked' : '') + ' aria-label="' + esc(t.titel) + ' übernehmen"></td>' +
         '<td class="wann">' + esc(wann) + (zeit ? '<br><span class="leise">' + esc(zeit) + '</span>' : '') + '</td>' +
         '<td><strong>' + esc(t.titel) + '</strong>' + (istExtern(t) ? ' <span class="etikett">' + EXTERN + '</span>' : '') + ' ' + stand +
-        (t.info ? '<div class="leise klein">' + esc(t.info) + '</div>' : '') +
+        (t.info ? '<div class="leise klein">' + esc(t.info) + '</div>' : '') + regel +
+        (t.warnung ? '<div class="klein verschoben">' + esc(t.warnung) + '</div>' : '') +
         '<div class="leise klein fuer-unten">' + esc(fuerSatz(fuerText(t.zielgruppen))) + '</div></td>' +
         '<td class="fuer-spalte">' + esc(fuerText(t.zielgruppen)) + '</td></tr>';
     });
@@ -1988,7 +2084,8 @@
       st.aufgaben.forEach(function (x, i) {
         var g = x.g;
         var unter = Array.isArray(g.unter) ? g.unter : [];
-        var zu = x.t ? 'zu „' + x.t.v.titel + '“ am ' + datumKurz(x.t.v.datum) : '';
+        var zu = [x.t ? 'zu „' + x.t.v.titel + '“ am ' + datumKurz(x.t.v.datum) : '', g.frist ? 'bis ' + datumKurz(g.frist) : '']
+          .filter(Boolean).join(' · ');
         h += '<tr' + (x.vorwahl ? '' : ' class="leise"') + '><td class="haken"><input type="checkbox" name="nimm" value="a' + i + '"' +
           (x.vorwahl ? ' checked' : '') + ' aria-label="' + esc(g.titel) + ' übernehmen"></td>' +
           '<td><strong>' + esc(g.titel) + '</strong>' + (x.da ? ' <span class="etikett">schon vorhanden</span>' : '') +
@@ -2020,8 +2117,8 @@
   }
 
   function importAbsenden(f, knopf) {
-    var d = z.vorlage && z.vorlage.daten;
-    if (!d) return;
+    var d = vorlageDaten();
+    if (!d || d.ferienLaedt) return;
     var st = vorlageStand(d);
     var gewaehlt = {};
     f.querySelectorAll('input[name=nimm]').forEach(function (b) { if (b.checked) gewaehlt[b.value] = true; });
@@ -2050,6 +2147,79 @@
       if (a.ok) { z.offen = null; window.scrollTo(0, 0); }
       render();
     });
+  }
+
+  // ---------- Aufgaben als Erinnerungen (Kalendereintrag mit Hinweis) ----------
+
+  function plusMinuten(zeit, n) {
+    var m = parseInt(zeit, 10) * 60 + parseInt(zeit.slice(3), 10) + n;
+    return m >= 24 * 60 ? '23:59' : zz(Math.floor(m / 60)) + ':' + zz(m % 60);
+  }
+  // Vorschlag: einige Tage vor dem Termin oder der Frist, nie in der Vergangenheit
+  function erinnerungsTag(g, vorher) {
+    if (!g.bisWann) return '';
+    var t = plusTage(g.bisWann, -vorher);
+    return t < heute() ? heute() : t;
+  }
+  function erinnerungEintrag(g, tag, zeit) {
+    var zeilen = [];
+    if (g.frist) zeilen.push('Bis ' + datumLang(g.frist));
+    if (g.termin) zeilen.push('Zu „' + g.termin.titel + '“ am ' + datumLang(g.termin.von));
+    var offen = g.unter.filter(function (u) { return !u.erledigt; }).map(function (u) { return '– ' + u.titel; });
+    if (offen.length) zeilen.push('Noch offen:\n' + offen.join('\n'));
+    zeilen.push(seitenLink('a-' + g.id));
+    return { uid: 'erinnerung-' + g.id, titel: 'Erinnerung: ' + g.titel, info: zeilen.join('\n\n'), tag: tag, von: zeit, bis: plusMinuten(zeit, 15), erinnerung: true };
+  }
+  function meineOffenenAufgaben() {
+    return z.sicht.aufgaben.filter(function (g) { return !g.fertig && !istAbgelaufen(g) && binDabei(g); });
+  }
+  function erinnerungsAuswahl(welche) {
+    return welche === 'meine' ? meineOffenenAufgaben() : offeneAufgaben();
+  }
+
+  var ERINNERN = [[0, 'am Tag selbst'], [1, 'einen Tag vorher'], [3, 'drei Tage vorher'], [7, 'eine Woche vorher'], [14, 'zwei Wochen vorher']];
+  var ERINNERUNG_TIPP = 'Lädt eine Kalenderdatei herunter – am Handy öffnen und „Hinzufügen“ wählen. ' +
+    'Der Kalender meldet sich dann zur eingestellten Zeit.';
+
+  function erinnerungFormular(g) {
+    var tag = erinnerungsTag(g, 3) || plusTage(heute(), 7);
+    return '<form class="kasten" data-form="erinnerung" data-id="' + esc(g.id) + '">' +
+      '<h3>Erinnerung für „' + esc(g.titel) + '“</h3>' +
+      '<div class="reihe"><label>Am<input type="date" name="tag" required value="' + esc(tag) + '"></label>' +
+      '<label>Um<input type="time" name="zeit" required value="18:00"></label><span class="lueckenfueller"></span></div>' +
+      '<p class="tipp">' + (g.bisWann ? 'Fällig ' + esc(datumLang(g.bisWann)) + '. ' : '') + ERINNERUNG_TIPP + '</p>' +
+      '<div class="knoepfe"><button type="submit" class="haupt">Erinnerung herunterladen</button>' +
+      '<button type="button" data-aktion="schliessen">Abbrechen</button></div></form>';
+  }
+
+  function erinnerungenKnopf(n) { return n === 1 ? '1 Erinnerung herunterladen' : n + ' Erinnerungen herunterladen'; }
+  function erinnerungenZahlen(welche) {
+    var liste = erinnerungsAuswahl(welche);
+    var mit = liste.filter(function (g) { return g.bisWann; }).length;
+    return { mit: mit, ohne: liste.length - mit };
+  }
+  function erinnerungenFormular() {
+    var meine = meineOffenenAufgaben().length;
+    var welche = (z.offen && z.offen.welche) || (meine ? 'meine' : 'alle');
+    var n = erinnerungenZahlen(welche);
+    function wahl(wert, text, aus) {
+      return '<label class="haken-zeile"><input type="radio" name="welche" value="' + wert + '"' + (welche === wert ? ' checked' : '') +
+        (aus ? ' disabled' : '') + '> ' + text + '</label>';
+    }
+    return '<form class="kasten" data-form="erinnerungen">' +
+      '<h3>Aufgaben als Erinnerungen in den Kalender</h3>' +
+      wahl('meine', 'Meine Aufgaben (wo ich eingetragen bin)' + (meine ? ' – ' + meine : ' – noch keine'), !meine) +
+      wahl('alle', 'Alle offenen Aufgaben, die ich hier sehe', false) +
+      '<div class="reihe"><label>Erinnern<select name="vorher">' + ERINNERN.map(function (e) {
+        return '<option value="' + e[0] + '"' + (e[0] === 3 ? ' selected' : '') + '>' + e[1] + '</option>';
+      }).join('') + '</select></label><label>Um<input type="time" name="zeit" required value="18:00"></label><span class="lueckenfueller"></span></div>' +
+      '<p class="tipp erinnerung-ohne">' + erinnerungenOhneText(n.ohne) + '</p>' +
+      '<p class="tipp">„Vorher“ heißt: vor der Frist oder, ohne Frist, vor dem Termin, zu dem die Aufgabe gehört. ' + ERINNERUNG_TIPP + '</p>' +
+      '<div class="knoepfe"><button type="submit" class="haupt"' + (n.mit ? '' : ' disabled') + '>' + erinnerungenKnopf(n.mit) + '</button>' +
+      '<button type="button" data-aktion="schliessen">Abbrechen</button></div></form>';
+  }
+  function erinnerungenOhneText(ohne) {
+    return ohne ? (ohne === 1 ? '1 Aufgabe hat' : ohne + ' Aufgaben haben') + ' kein Datum und bekommt keine Erinnerung – dafür bei der Aufgabe „Erinnerung“ wählen.' : '';
   }
 
   function icsEintrag(t) {
@@ -2445,6 +2615,19 @@
         break;
       }
 
+      case 'erinnerung':
+        oeffne({ art: 'erinnerung', id: id }, 'form[data-form=erinnerung] input[name=tag]');
+        break;
+
+      case 'erinnerungen':
+      case 'erinnerungen-meine':
+        if (aktion === 'erinnerungen-meine') {
+          z.reiter = 'aufgaben';
+          history.replaceState(null, '', '#aufgaben');
+        }
+        oeffne({ art: 'erinnerungen', welche: aktion === 'erinnerungen-meine' ? 'meine' : '' }, 'form[data-form=erinnerungen] select[name=vorher]');
+        break;
+
       case 'team-aufgaben':
         z.teamAufgaben[id] = !z.teamAufgaben[id];
         render();
@@ -2475,6 +2658,24 @@
 
     if (art === 'import') {
       importAbsenden(f, knopf);
+    } else if (art === 'erinnerung') {
+      var eg = finde(z.sicht.aufgaben, id);
+      if (!eg || !w.tag || !w.zeit) return;
+      icsHerunterladen([erinnerungEintrag(eg, w.tag, w.zeit)], dateiname('Erinnerung ' + eg.titel));
+      z.offen = null;
+      render();
+      zeigeMeldung('Erinnerung heruntergeladen – Datei öffnen und hinzufügen.');
+    } else if (art === 'erinnerungen') {
+      var welche = (f.querySelector('input[name=welche]:checked') || {}).value || 'alle';
+      var vorher = parseInt(w.vorher, 10) || 0;
+      var eintraege = erinnerungsAuswahl(welche).filter(function (g) { return g.bisWann; }).map(function (g) {
+        return erinnerungEintrag(g, erinnerungsTag(g, vorher), w.zeit || '18:00');
+      });
+      if (!eintraege.length) return;
+      icsHerunterladen(eintraege, welche === 'meine' ? 'meine-erinnerungen.ics' : 'erinnerungen.ics');
+      z.offen = null;
+      render();
+      zeigeMeldung(eintraege.length === 1 ? '1 Erinnerung heruntergeladen.' : eintraege.length + ' Erinnerungen heruntergeladen.');
     } else if (art === 'eintragen') {
       if (!w.name) return;
       // Beim Eintragen weiterer Personen bleibt der eigene gespeicherte Name unverändert.
@@ -2636,6 +2837,18 @@
   }
   document.addEventListener('input', kalenderVorschau);
   document.addEventListener('change', kalenderVorschau);
+  // Erinnerungen: Anzahl auf dem Knopf
+  document.addEventListener('change', function (ev) {
+    var f = ev.target && ev.target.form;
+    if (!f || f.getAttribute('data-form') !== 'erinnerungen' || !z.sicht) return;
+    var welche = (f.querySelector('input[name=welche]:checked') || {}).value || 'alle';
+    if (z.offen) z.offen.welche = welche;
+    var n = erinnerungenZahlen(welche);
+    var k = f.querySelector('button[type=submit]');
+    k.textContent = erinnerungenKnopf(n.mit);
+    k.disabled = !n.mit;
+    f.querySelector('.erinnerung-ohne').textContent = erinnerungenOhneText(n.ohne);
+  });
   // Vorlage: Häkchen zählen, andere Vorlage laden
   document.addEventListener('change', function (ev) {
     var el = ev.target;
@@ -2643,6 +2856,7 @@
     if (!f || f.getAttribute('data-form') !== 'import') return;
     if (el.name === 'nimm') importVorschau(f);
     if (el.name === 'vorlage') { ladeVorlage(el.value); render(); }
+    if (el.name === 'jahr') { z.vorlageJahr = +el.value; ladeJahresFerien(z.vorlageJahr); render(); }
   });
 
   // =====================================================================
