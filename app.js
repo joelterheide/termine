@@ -1078,7 +1078,7 @@
     if (t.direkt) h += '<div class="schichten">' + direktZeile(t, vorbei) + '</div>';
     h += schichtenHtml(t);
     h += terminAufgabenHtml(t);
-    if (istOffen('aufgabe', '', t.id)) h += aufgabeFormular(null, t.id);
+    if (istOffen('aufgabe', '', t.id)) h += zuordnenFormular(t) + aufgabeFormular(null, t.id);
     if (istOffen('schicht', '', t.id)) h += schichtFormular(t, null);
     if (istOffen('kopieren', t.id)) h += kopierFormular(t);
 
@@ -1476,6 +1476,40 @@
       '<span class="tipp leise klein">Alle Schichten werden mitkopiert, die Eintragungen nicht.</span></form>';
   }
 
+  // „+ Aufgabe dazu“: vorhandene Aufgaben diesem Termin zuordnen (offene, die noch nicht dazugehören)
+  function zuordnenKandidaten(t) {
+    return z.sicht.aufgaben.filter(function (g) {
+      return !g.fertig && !istAbgelaufen(g) && !(g.termin && g.termin.id === t.id);
+    }).sort(function (a, b) {
+      if (!a.termin !== !b.termin) return a.termin ? 1 : -1;
+      return (a.bisWann || '9999') < (b.bisWann || '9999') ? -1 : (a.bisWann || '9999') > (b.bisWann || '9999') ? 1 : 0;
+    });
+  }
+  function zuordnenKnopf(n) { return n ? (n === 1 ? '1 Aufgabe zuordnen' : n + ' Aufgaben zuordnen') : 'Zuordnen'; }
+  function zuordnenFormular(t) {
+    var liste = zuordnenKandidaten(t);
+    if (!liste.length) return '';
+    function zeile(g) {
+      var mehr = [];
+      if (g.frist) mehr.push('bis ' + datumKurz(g.frist));
+      if (g.termin) mehr.push('jetzt bei „' + g.termin.titel + '“ (' + datumKurz(g.termin.von) + ')');
+      if (g.zg.length) mehr.push(fuerSatz(zgKurz(g.zg).join(', ')));
+      return '<label class="haken-zeile"><input type="checkbox" name="aufgabe" value="' + esc(g.id) + '"> <span>' + esc(g.titel) +
+        (mehr.length ? ' <span class="leise klein">' + esc(mehr.join(' · ')) + '</span>' : '') + '</span></label>';
+    }
+    var ohne = liste.filter(function (g) { return !g.termin; });
+    var mit = liste.filter(function (g) { return g.termin; });
+    return '<form class="kasten zuordnen" data-form="zuordnen" data-termin="' + esc(t.id) + '">' +
+      '<h3>Vorhandene Aufgabe dazunehmen</h3>' + veraltetHinweis(5, '„Gehört zu Termin“ wird') +
+      '<div class="zuordnen-liste">' +
+      (ohne.length ? '<div class="fuer-titel">Ohne Termin</div>' + ohne.map(zeile).join('') : '') +
+      (mit.length ? '<div class="fuer-titel">Gehören zu einem anderen Termin – wandern dann hierher</div>' + mit.map(zeile).join('') : '') +
+      '</div>' +
+      '<p class="tipp">Die Aufgabe bleibt, wie sie ist (mit allen Einträgen) – sie steht dann nur bei diesem Termin.</p>' +
+      '<div class="knoepfe"><button type="submit" class="haupt">' + zuordnenKnopf(0) + '</button>' +
+      '<button type="button" data-aktion="schliessen">Abbrechen</button></div></form>';
+  }
+
   function aufgabeFormular(g, terminVorwahl) {
     g = g || {};
     var unter = !!g.eltern_id;
@@ -1487,7 +1521,7 @@
         return '<option value="' + esc(t.id) + '"' + (t.id === terminId ? ' selected' : '') + '>' + esc(datumKurz(t.von) + ' · ' + t.titel) + '</option>';
       }).join('') + '</select><span class="tipp">optional – die Aufgabe steht dann auch beim Termin</span></label>';
     return '<form class="kasten" data-form="aufgabe" data-id="' + esc(g.id || '') + '"' + (terminVorwahl ? ' data-termin="' + esc(terminVorwahl) + '"' : '') + '>' +
-      '<h3>' + (unter ? 'Unteraufgabe bearbeiten' : g.id ? 'Aufgabe bearbeiten' : 'Neue Aufgabe') + '</h3>' +
+      '<h3>' + (unter ? 'Unteraufgabe bearbeiten' : g.id ? 'Aufgabe bearbeiten' : terminVorwahl && zuordnenKandidaten({ id: terminVorwahl }).length ? 'Oder neue Aufgabe anlegen' : 'Neue Aufgabe') + '</h3>' +
       (unter ? '' : veraltetHinweis(5, '„Für wen?“ und „Gehört zu Termin“ werden')) +
       '<label>Titel<input name="titel" required maxlength="120" value="' + esc(g.titel || '') + '" placeholder="z. B. Kuchen backen"></label>' +
       (unter
@@ -2116,6 +2150,36 @@
     f.querySelector('button[type=submit]').textContent = importKnopf(nT, nA);
   }
 
+  // Jede Aufgabe einzeln mit „aufgabe_speichern“ – alles bleibt gleich, nur der Termin ändert sich
+  function zuordnenAbsenden(f, knopf) {
+    var tid = f.getAttribute('data-termin');
+    var ids = Array.prototype.filter.call(f.querySelectorAll('input[name=aufgabe]'), function (b) { return b.checked; })
+      .map(function (b) { return b.value; });
+    if (!ids.length) { zeigeMeldung('Bitte mindestens eine Aufgabe anhaken.', true); return; }
+    var i = 0;
+    knopf.disabled = true;
+    (function weiter() {
+      if (i >= ids.length) {
+        z.offen = null;
+        z.springeZu = 't-' + tid;
+        render();
+        zeigeMeldung(ids.length === 1 ? 'Aufgabe zugeordnet.' : ids.length + ' Aufgaben zugeordnet.');
+        return;
+      }
+      var g = finde(z.daten.Aufgaben, ids[i]);
+      if (!g) { i++; weiter(); return; }
+      knopf.textContent = 'Ordne zu … ' + (i + 1) + '/' + ids.length;
+      verwalten({ aktion: 'aufgabe_speichern', aufgabe: {
+        id: g.id, titel: g.titel, info: g.info || '', frist: g.frist || '', anzahl: g.anzahl || '0',
+        zielgruppen: g.zielgruppen || '', termin_id: tid
+      } }, null).then(function (a) {
+        if (!a.ok) { render(); return; }   // Meldung zeigt senden()
+        i++;
+        weiter();
+      });
+    })();
+  }
+
   function importAbsenden(f, knopf) {
     var d = vorlageDaten();
     if (!d || d.ferienLaedt) return;
@@ -2585,9 +2649,12 @@
         break;
       }
 
-      case 'aufgabe-dazu':
-        oeffne({ art: 'aufgabe', id: '', termin: el.getAttribute('data-termin') }, 'form[data-form=aufgabe] input[name=titel]');
+      case 'aufgabe-dazu': {
+        var dazuT = finde(z.sicht.termine, el.getAttribute('data-termin'));
+        oeffne({ art: 'aufgabe', id: '', termin: el.getAttribute('data-termin') },
+          dazuT && zuordnenKandidaten(dazuT).length ? 'form[data-form=zuordnen] input[name=aufgabe]' : 'form[data-form=aufgabe] input[name=titel]');
         break;
+      }
 
       case 'extern-filter':
         z.externAus = !z.externAus;
@@ -2658,6 +2725,8 @@
 
     if (art === 'import') {
       importAbsenden(f, knopf);
+    } else if (art === 'zuordnen') {
+      zuordnenAbsenden(f, knopf);
     } else if (art === 'erinnerung') {
       var eg = finde(z.sicht.aufgaben, id);
       if (!eg || !w.tag || !w.zeit) return;
@@ -2837,6 +2906,12 @@
   }
   document.addEventListener('input', kalenderVorschau);
   document.addEventListener('change', kalenderVorschau);
+  // Zuordnen: Anzahl auf dem Knopf
+  document.addEventListener('change', function (ev) {
+    var f = ev.target && ev.target.form;
+    if (!f || f.getAttribute('data-form') !== 'zuordnen') return;
+    f.querySelector('button[type=submit]').textContent = zuordnenKnopf(f.querySelectorAll('input[name=aufgabe]:checked').length);
+  });
   // Erinnerungen: Anzahl auf dem Knopf
   document.addEventListener('change', function (ev) {
     var f = ev.target && ev.target.form;

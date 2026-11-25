@@ -799,3 +799,9 @@ select:focus { outline: 2px solid var(--akzent); outline-offset: 1px; }
 .kasten.import label.jahr-wahl select { width: auto; margin: 0; }
 .import-liste .regel { font-style: italic; }
 .import-liste .verschoben { color: var(--fehler); font-style: normal; }
+
+/* „+ Aufgabe dazu“: vorhandene Aufgaben zuordnen */
+.zuordnen-liste { max-height: 18rem; overflow-y: auto; margin: 0 0 .75rem; }
+.zuordnen-liste .fuer-titel { margin: .5rem 0 .25rem; }
+.kasten .zuordnen-liste label.haken-zeile { align-items: flex-start; margin-bottom: .4rem; }
+.kasten .zuordnen-liste label.haken-zeile input { margin-top: .2rem; flex: none; }
