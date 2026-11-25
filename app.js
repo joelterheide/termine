@@ -92,7 +92,8 @@
     aufgeklappt: {},      // aufgeklappte Termine „Jugend extern“ (id → true)
     trotzdem: '',         // ausgeblendeter Termin/Aufgabe/Abstimmung, der per Link geöffnet wurde
     profil: leseProfil(), // für wen der Jahresplan angezeigt wird
-    vorlage: null         // geladene Vorlage zum Übernehmen von Terminen (Verwaltung)
+    vorlage: null,        // geladene Vorlage zum Übernehmen von Terminen (Verwaltung)
+    teamAufgaben: {}      // Verwaltung: beim Termin aufgeklappte Team-Aufgaben (id → true)
   };
 
   function setzeProfil(liste) {
@@ -383,8 +384,33 @@
     if (!liste || !liste.length || !profilAktiv()) return true;
     return liste.some(function (x) { return z.profil.some(function (p) { return istGleich(p, x); }); });
   }
-  function sichtbar(t) { return z.trotzdem === t.id || ((!t.extern || !z.externAus) && passt(t.zg)); }
-  function aufgabeSichtbar(g) { return z.trotzdem === g.id || passt(g.zg); }
+  // Wer im Team einer Team-Aufgabe ist, sieht auch den Termin dazu (z. B. Team SoLa das Sommerlager)
+  function sichtbar(t) {
+    if (z.trotzdem === t.id) return true;
+    if (t.extern && z.externAus) return false;
+    return fuerMich(t);
+  }
+  function fuerMich(t) {
+    return passt(t.zg) || t.aufgaben.some(function (g) { return nurTeams(g.zg) && imTeam(g.zg); });
+  }
+  // Aufgaben nur für Teams (z. B. „Team SoLa“, „MAK“) sieht nur, wer das Team bei „Für wen?“ angehakt
+  // hat oder schon eingetragen ist – auch bei „Alles anzeigen“. Die Verwaltung sieht sie unter „Aufgaben“.
+  function nurTeams(liste) {
+    return !!liste && liste.length > 0 && ZG.teams.length > 0 &&
+      liste.every(function (x) { return ZG.teams.some(function (n) { return istGleich(n, x); }); });
+  }
+  function imTeam(liste) {
+    return !!z.profil && liste.some(function (x) { return z.profil.some(function (p) { return istGleich(p, x); }); });
+  }
+  function binDabei(g) {
+    return !!z.name && g.unter.reduce(function (l, u) { return l.concat(u.leute); }, g.leute).some(function (e) { return ich(e.name); });
+  }
+  function teamAufgabeFuerMich(g) { return imTeam(g.zg) || binDabei(g); }
+  function aufgabeSichtbar(g) {
+    if (z.trotzdem === g.id) return true;
+    if (nurTeams(g.zg)) return admin() || teamAufgabeFuerMich(g);
+    return passt(g.zg);
+  }
   function sichtbareTermine() { return kommendeTermine().filter(sichtbar); }
   function offeneAufgaben() { return z.sicht.aufgaben.filter(function (g) { return aufgabeSichtbar(g) && !istAbgelaufen(g) && !g.fertig; }); }
   function erledigteAufgaben() { return z.sicht.aufgaben.filter(function (g) { return aufgabeSichtbar(g) && !istAbgelaufen(g) && g.fertig; }); }
@@ -553,6 +579,7 @@
     return '<form class="kasten profil" data-form="profil">' +
       '<h3>' + (erstes ? 'Für wen soll der Jahresplan sein?' : 'Jahresplan anpassen') + '</h3>' +
       '<p class="tipp">Du siehst dann nur die Termine und Aufgaben, die dich betreffen. Mehrere Häkchen sind möglich. ' +
+      (ZG.teams.length ? 'Aufgaben eines Teams (z. B. ' + esc(ZG.teams[ZG.teams.length > 1 ? 1 : 0]) + ') siehst du nur, wenn du das Team anhakst. ' : '') +
       'Die Auswahl gilt nur in diesem Browser und lässt sich oben jederzeit ändern.</p>' +
       boxen('Gruppe', ZG.gruppen) + boxen('Team', ZG.teams) + boxen('Sonstige', ZG.weitere) +
       '<div class="knoepfe"><button type="submit" class="haupt">Übernehmen</button>' +
@@ -1043,8 +1070,18 @@
 
   // Zugeordnete Aufgaben beim Termin, mit Stand und Link zur Aufgabe
   function terminAufgabenHtml(t) {
-    var liste = t.aufgaben.filter(aufgabeSichtbar);
-    if (!liste.length) return '';
+    // Team-Aufgaben beim Termin nur fürs Team; die Verwaltung kann sie aufklappen
+    var team = t.aufgaben.filter(function (g) { return nurTeams(g.zg) && !teamAufgabeFuerMich(g) && z.trotzdem !== g.id; });
+    var offen = admin() && z.teamAufgaben[t.id];
+    var liste = t.aufgaben.filter(function (g) { return team.indexOf(g) < 0 ? aufgabeSichtbar(g) : offen; });
+    var hinweis = '';
+    if (admin() && team.length) {
+      var fuer = einzigartig(team.map(function (g) { return zgKurz(g.zg).join(', '); }));
+      hinweis = '<p class="t-team-hinweis leise klein">' + (team.length === 1 ? '1 Aufgabe' : team.length + ' Aufgaben') +
+        ' nur für ' + esc(fuer.join(' / ')) + ' – sieht nur, wer das bei „Für wen?“ gewählt hat · ' +
+        '<button class="link" data-aktion="team-aufgaben" data-id="' + esc(t.id) + '">' + (offen ? 'ausblenden' : 'anzeigen') + '</button></p>';
+    }
+    if (!liste.length) return hinweis ? '<div class="t-aufgaben">' + hinweis + '</div>' : '';
     return '<div class="t-aufgaben"><span class="t-aufgaben-titel">Aufgaben dazu</span><ul>' + liste.map(function (g) {
       var alleLeute = g.unter.reduce(function (l, u) { return l.concat(u.leute); }, g.leute);
       var dabei = alleLeute.some(function (e) { return ich(e.name); });
@@ -1054,7 +1091,7 @@
       else stand = g.leute.length + '/' + (zahl(g.anzahl) || '∞');
       return '<li' + (g.fertig ? ' class="fertig"' : '') + '><a href="#a-' + esc(g.id) + '">' + esc(g.titel) + '</a>' +
         ' <span class="leise">' + esc(stand) + '</span>' + (dabei ? ' <span class="dabei">du bist dabei</span>' : '') + '</li>';
-    }).join('') + '</ul></div>';
+    }).join('') + '</ul>' + hinweis + '</div>';
   }
 
   // „14:00–16:00 Uhr“ oder „19:00 Uhr“
@@ -1758,7 +1795,7 @@
   // Termine ab Stichtag, wahlweise ohne „Jugend extern“
   function kalenderAuswahl(ab, ohneExtern) {
     return z.sicht.termine.filter(function (t) {
-      return t.von && (t.bis || t.von) >= ab && !(ohneExtern && t.extern) && passt(t.zg);
+      return t.von && (t.bis || t.von) >= ab && !(ohneExtern && t.extern) && fuerMich(t);
     });
   }
 
@@ -2407,6 +2444,11 @@
         if (kasten) kasten.scrollIntoView({ block: 'start' });
         break;
       }
+
+      case 'team-aufgaben':
+        z.teamAufgaben[id] = !z.teamAufgaben[id];
+        render();
+        break;
 
       case 'import-alle':
       case 'import-keine': {

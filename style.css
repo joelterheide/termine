@@ -729,6 +729,7 @@ select:focus { outline: 2px solid var(--akzent); outline-offset: 1px; }
 .t-aufgaben-titel { font-weight: 600; font-size: .9375rem; }
 .t-aufgaben ul { margin: .25rem 0 0; padding-left: 1.1rem; }
 .t-aufgaben li { margin: .15rem 0; }
+.t-team-hinweis { margin: .3rem 0 0; }
 .t-aufgaben li.fertig a { text-decoration: line-through; color: var(--leise); }
 .t-aufgaben .dabei { font-size: .8125rem; font-weight: 600; }
 
