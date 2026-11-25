@@ -16,12 +16,20 @@ window.HELFERLISTE = {
   // „Für wen?“: Beim ersten Öffnen wählt jeder aus, für wen der Jahresplan sein soll,
   // und sieht dann nur, was ihn betrifft. Termine, Aufgaben und Abstimmungen bekommen
   // dazu im Formular das Feld „Für wen?“ (nichts angehakt = für alle).
-  // Gruppen bitte von jung nach alt sortieren – dann geht im Formular „ab Gruppe …“.
+  // Gruppen bitte von jung nach alt sortieren: „ab Pinguine“ bei einem Termin heißt
+  // „Pinguine und alle Gruppen, die hier danach stehen“. Ändert sich die Reihenfolge
+  // (oder kommt eine Gruppe dazu), passen sich alle Termine mit „ab …“ von selbst an.
   zielgruppen: {
-    gruppen: ['Stachos', 'Barrakudas', 'Erdmännchen', 'Belugas', 'Wanderfalken', 'Pinguine'],
-    teams: ['MAK', 'Team SoLa'],      // Arbeitsgruppen mit eigenen Terminen
+    gruppen: ['Stachos', 'Barrakudas', 'Belugas', 'Wanderfalken', 'Pinguine', 'Erdmännchen'],
+    teams: ['MAK', 'Team SoLa', 'Leiter', 'Schwarzhalstüchler'],   // Arbeitsgruppen mit eigenen Terminen
     weitere: ['Eltern']               // Zielgruppen außerhalb der Jugend
   },
+
+  // Vorlagen, aus denen die Verwaltung Termine und Aufgaben auf einmal übernehmen kann
+  // (unten auf der Seite: „Termine aus Vorlage übernehmen“).
+  vorlagen: [
+    { titel: 'Jahresplan Dez. 2026 – Dez. 2027', datei: 'vorlagen/jahresplan-2027.json' }
+  ],
 
   // Putzdienst in der Tabellenansicht: Die Gruppen sind reihum je einen Monat dran,
   // die erste Gruppe im Monat „ab“ (JJJJ-MM). Leere Liste = kein Putzdienst anzeigen.

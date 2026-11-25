@@ -734,3 +734,62 @@ select:focus { outline: 2px solid var(--akzent); outline-offset: 1px; }
 
 /* Putzdienst der eigenen Gruppe in der Tabelle */
 .monat-zeile .putz.meins { color: var(--text); font-weight: 600; }
+
+/* Termine aus Vorlage übernehmen */
+.kasten.import > p { margin: 0 0 .75rem; font-size: .9375rem; }
+.vorlage-hinweise {
+  margin: 0 0 .9rem;
+  font-size: .875rem;
+  color: var(--leise);
+}
+.vorlage-hinweise summary { cursor: pointer; }
+.vorlage-hinweise ul { margin: .4rem 0 0; padding-left: 1.1rem; }
+.vorlage-hinweise li { margin-bottom: .2rem; }
+.import-kopf {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: .5rem;
+  margin-top: 1rem;
+}
+.import-kopf h4 { margin: 0; font-size: .9375rem; }
+.import-kopf span { font-size: .875rem; }
+.import-liste {
+  width: 100%;
+  border-collapse: collapse;
+  margin: .3rem 0 .9rem;
+  font-size: .9375rem;
+}
+.import-liste td, .import-liste th {
+  text-align: left;
+  vertical-align: top;
+  padding: .4rem .6rem .4rem 0;
+  border-bottom: 1px solid var(--linie);
+}
+.import-liste td:last-child { padding-right: 0; }
+.import-liste .monat th {
+  padding-top: .9rem;
+  font-weight: 600;
+  border-bottom-color: var(--rand);
+}
+.import-liste td.haken { width: 1%; padding-right: .5rem; }
+.import-liste td.haken input { margin: .2rem 0 0; }
+.import-liste td.wann {
+  width: 1%;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.import-liste td.fuer-spalte { width: 24%; color: var(--leise); font-size: .875rem; }
+.import-liste tr.leise strong { font-weight: 400; }
+.import-liste tr.leise td { color: var(--leise); }
+.import-liste details { margin-top: .2rem; }
+.import-liste details ul { margin: .2rem 0 0; padding-left: 1.1rem; }
+.import-liste summary { cursor: pointer; color: var(--leise); }
+.import-liste .fuer-unten { display: none; }
+@media (max-width: 560px) {
+  .import-liste td.fuer-spalte { display: none; }
+  .import-liste .fuer-unten { display: block; }
+  .import-liste td { padding-right: .5rem; overflow-wrap: anywhere; }
+  .import-liste td.wann { white-space: normal; overflow-wrap: normal; }
+  .import-liste .etikett { white-space: normal; }
+}

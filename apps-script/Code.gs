@@ -28,7 +28,7 @@ const PASSWORT = 'bitte-aendern';
 // ============ AB HIER NICHTS ÄNDERN NÖTIG ==============
 
 const STANDARD_PASSWORT = 'bitte-aendern';
-const VERSION = 5; // die Website prüft damit, ob diese Datei aktuell ist
+const VERSION = 6; // die Website prüft damit, ob diese Datei aktuell ist
 const ZEITZONE = 'Europe/Berlin';
 
 const TABELLEN = {
@@ -62,7 +62,8 @@ const VERWALTUNG = {
   schicht_speichern: true, schicht_loeschen: true,
   aufgabe_speichern: true, aufgabe_loeschen: true, unteraufgaben_hinzufuegen: true,
   abstimmung_speichern: true, abstimmung_loeschen: true,
-  abstimmung_festlegen: true, option_loeschen: true
+  abstimmung_festlegen: true, option_loeschen: true,
+  importieren: true
 };
 
 // =======================================================
@@ -146,27 +147,8 @@ const AKTIONEN = {
 
   termin_speichern: function (ctx, a) {
     const t = a.termin || {};
-    const titel = einzeilig_(t.titel, 120);
-    if (!titel) throw fehler_('Bitte einen Titel angeben.');
-    const datum = datum_(t.datum);
-    if (!datum) throw fehler_('Bitte ein gültiges Datum angeben.');
-    let bisDatum = '';
-    if (t.bis_datum) {
-      bisDatum = datum_(t.bis_datum);
-      if (!bisDatum) throw fehler_('Bitte ein gültiges Datum für „bis“ angeben.');
-      if (bisDatum < datum) throw fehler_('Das Ende liegt vor dem Beginn.');
-      if (bisDatum === datum) bisDatum = '';
-    }
-    const zeiten = zeiten_(t.zeit);
-    if (zeiten.length > 1) throw fehler_('Bitte nur eine Uhrzeit oder einen Zeitraum angeben, z. B. 14:00–16:00.');
-    const zeit = zeiten[0] || { von: '', bis: '' };
-    const plaetze = t.plaetze === '' || t.plaetze == null ? '' : String(zahl_(t.plaetze));
-    const daten = {
-      titel: titel, datum: datum, ort: einzeilig_(t.ort, 150), info: mehrzeilig_(t.info, 2000),
-      bis_datum: bisDatum, von: zeit.von, bis: zeit.bis, plaetze: plaetze,
-      kategorie: einzeilig_(t.kategorie, 40),
-      zielgruppen: zielgruppen_(t.zielgruppen)
-    };
+    const daten = terminDaten_(t);
+    const datum = daten.datum;
 
     if (t.id) {
       const alt = finde_(ctx.db.Termine, t.id);
@@ -186,6 +168,76 @@ const AKTIONEN = {
     }
     const neu = neu_(ctx, 'Termine', daten);
     return { meldung: 'Termin angelegt.', id: neu.id };
+  },
+
+  // Viele Termine und Aufgaben auf einmal (z. B. aus einer Jahresplan-Vorlage).
+  // Erst wird alles geprüft, dann angelegt – bei einem Fehler wird nichts gespeichert.
+  // Schon vorhandene Termine (gleiches Datum, gleicher Titel) und offene Aufgaben mit
+  // gleichem Titel werden übersprungen, damit ein doppelter Klick nichts verdoppelt.
+  importieren: function (ctx, a) {
+    const termine = Array.isArray(a.termine) ? a.termine : [];
+    const aufgaben = Array.isArray(a.aufgaben) ? a.aufgaben : [];
+    if (termine.length > 400 || aufgaben.length > 200) throw fehler_('Zu viele Einträge auf einmal.');
+    if (!termine.length && !aufgaben.length) throw fehler_('Nichts ausgewählt.');
+
+    const neueTermine = termine.map(function (t, i) {
+      try {
+        return { schluessel: String(t.key || ''), daten: terminDaten_(t) };
+      } catch (e) {
+        if (e.nutzerfehler) e.message = '„' + einzeilig_(t.titel, 60) + '“ (' + (i + 1) + '. Termin): ' + e.message;
+        throw e;
+      }
+    });
+    const neueAufgaben = aufgaben.map(function (g) {
+      const titel = einzeilig_(g.titel, 120);
+      if (!titel) throw fehler_('Eine Aufgabe hat keinen Titel.');
+      let frist = '';
+      if (g.frist) {
+        frist = datum_(g.frist);
+        if (!frist) throw fehler_('„' + titel + '“: Datum für „bis“ nicht verstanden.');
+      }
+      const unter = (Array.isArray(g.unter) ? g.unter : []).slice(0, 60)
+        .map(function (u) { return einzeilig_(u && typeof u === 'object' ? u.titel : u, 120); })
+        .filter(function (u) { return u; });
+      return {
+        titel: titel, info: mehrzeilig_(g.info, 2000), frist: frist, anzahl: String(zahl_(g.anzahl)),
+        zielgruppen: zielgruppen_(g.zielgruppen), termin: String(g.termin || ''), termin_id: String(g.termin_id || ''), unter: unter
+      };
+    });
+
+    const ids = {}; // Schlüssel aus der Vorlage → Termin-ID
+    let nT = 0, nA = 0, nU = 0, doppelt = 0;
+    neueTermine.forEach(function (x) {
+      const da = ctx.db.Termine.filter(function (v) {
+        return datum_(v.datum) === x.daten.datum && gleicherName_(v.titel, x.daten.titel);
+      })[0];
+      if (da) { doppelt++; if (x.schluessel) ids[x.schluessel] = da.id; return; }
+      const neu = neu_(ctx, 'Termine', x.daten);
+      if (x.schluessel) ids[x.schluessel] = neu.id;
+      nT++;
+    });
+    neueAufgaben.forEach(function (g) {
+      const da = ctx.db.Aufgaben.some(function (v) { return !v.eltern_id && !v.erledigt && gleicherName_(v.titel, g.titel); });
+      if (da) { doppelt++; return; }
+      let terminId = ids[g.termin] || '';
+      if (!terminId && g.termin_id && finde_(ctx.db.Termine, g.termin_id)) terminId = g.termin_id;
+      const haupt = neu_(ctx, 'Aufgaben', {
+        titel: g.titel, info: g.info, frist: g.frist, anzahl: g.anzahl, eltern_id: '', erledigt: '', erledigt_von: '',
+        zielgruppen: g.zielgruppen, termin_id: terminId
+      });
+      g.unter.forEach(function (u) {
+        neu_(ctx, 'Aufgaben', { titel: u, info: '', frist: '', anzahl: '0', eltern_id: haupt.id, erledigt: '', erledigt_von: '', zielgruppen: '', termin_id: '' });
+        nU++;
+      });
+      nA++;
+    });
+
+    const teile = [];
+    if (nT) teile.push(nT === 1 ? '1 Termin' : nT + ' Termine');
+    if (nA) teile.push((nA === 1 ? '1 Aufgabe' : nA + ' Aufgaben') + (nU ? ' (mit ' + nU + ' Unteraufgaben)' : ''));
+    let text = teile.length ? teile.join(' und ') + ' übernommen.' : 'Nichts Neues übernommen.';
+    if (doppelt) text += ' ' + doppelt + ' schon vorhanden, übersprungen.';
+    return text;
   },
 
   termin_loeschen: function (ctx, a) {
@@ -491,7 +543,36 @@ function festlegen_(ctx, p, optionId) {
   return t;
 }
 
-/** 'Pinguine,  MAK , pinguine' oder ['Pinguine', 'MAK'] → 'Pinguine, MAK' (leer = für alle) */
+/** Termin-Felder aus dem Formular (oder einer Vorlage) prüfen und vereinheitlichen. */
+function terminDaten_(t) {
+  t = t || {};
+  const titel = einzeilig_(t.titel, 120);
+  if (!titel) throw fehler_('Bitte einen Titel angeben.');
+  const datum = datum_(t.datum);
+  if (!datum) throw fehler_('Bitte ein gültiges Datum angeben.');
+  let bisDatum = '';
+  if (t.bis_datum) {
+    bisDatum = datum_(t.bis_datum);
+    if (!bisDatum) throw fehler_('Bitte ein gültiges Datum für „bis“ angeben.');
+    if (bisDatum < datum) throw fehler_('Das Ende liegt vor dem Beginn.');
+    if (bisDatum === datum) bisDatum = '';
+  }
+  const zeiten = zeiten_(t.zeit);
+  if (zeiten.length > 1) throw fehler_('Bitte nur eine Uhrzeit oder einen Zeitraum angeben, z. B. 14:00–16:00.');
+  const zeit = zeiten[0] || { von: '', bis: '' };
+  const plaetze = t.plaetze === '' || t.plaetze == null ? '' : String(zahl_(t.plaetze));
+  return {
+    titel: titel, datum: datum, ort: einzeilig_(t.ort, 150), info: mehrzeilig_(t.info, 2000),
+    bis_datum: bisDatum, von: zeit.von, bis: zeit.bis, plaetze: plaetze,
+    kategorie: einzeilig_(t.kategorie, 40),
+    zielgruppen: zielgruppen_(t.zielgruppen)
+  };
+}
+
+/**
+ * 'Pinguine,  MAK , pinguine' oder ['Pinguine', 'MAK'] → 'Pinguine, MAK' (leer = für alle).
+ * „ab Pinguine“ bleibt so stehen: Die Website löst es über die Reihenfolge der Gruppen in config.js auf.
+ */
 function zielgruppen_(w) {
   const liste = Array.isArray(w) ? w : String(w == null ? '' : w).split(',');
   const aus = [];
