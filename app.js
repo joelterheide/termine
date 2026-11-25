@@ -2658,6 +2658,10 @@
     var freitag = tag(30 + (5 - (h.getDay() + 30) % 7 + 7) % 7); // ein Freitag in gut vier Wochen
     var jetzt = new Date().toISOString();
     var grp = ZG.gruppen.length ? ZG.gruppen : ['Gruppe 1', 'Gruppe 2'];
+    // „ab …“ wie im echten Jahresplan, wenn es die Gruppe gibt – sonst die ältesten Gruppen
+    function ab(name, sonst) {
+      return grp.some(function (g) { return istGleich(g, name); }) ? 'ab ' + name : grp.slice(-sonst).join(', ');
+    }
 
     function s(id, termin, station, von, bis, anzahl, datum, info) {
       return { id: id, termin_id: termin, station: station, datum: datum || '', von: von, bis: bis, anzahl: String(anzahl), info: info || '' };
@@ -2678,9 +2682,9 @@
         { id: 't6', titel: 'Dekanatsjugendgottesdienst', datum: tag(13), ort: 'St. Paul', info: 'Treffpunkt 18:15 Uhr vor dem Gemeindehaus, wir fahren gemeinsam.', von: '19:00', bis: '', plaetze: '0', kategorie: 'Jugend extern' },
         { id: 't7', titel: 'Kreisjugendring-Vollversammlung', datum: tag(19), ort: 'Jugendzentrum', info: '', von: '18:00', bis: '20:00', plaetze: '', kategorie: 'Jugend extern' },
         // mehrtägig mit Bis-Datum und Platzgrenze, nur für die älteren Gruppen
-        { id: 't5', titel: 'Jugendwochenende', datum: freitag, bis_datum: plusTage(freitag, 2), ort: 'Jugendhaus am See', info: 'Anreise Freitag 17 Uhr, Rückkehr Sonntag nach dem Mittagessen.', von: '17:00', bis: '', plaetze: '12', zielgruppen: grp.slice(-2).join(', ') },
+        { id: 't5', titel: 'Jugendwochenende', datum: freitag, bis_datum: plusTage(freitag, 2), ort: 'Jugendhaus am See', info: 'Anreise Freitag 17 Uhr, Rückkehr Sonntag nach dem Mittagessen.', von: '17:00', bis: '', plaetze: '12', zielgruppen: ab('Polarwölfe', 2) },
         // „Für wen?“: nur für bestimmte Gruppen, Teams oder Eltern
-        { id: 't8', titel: 'MAK-Sitzung', datum: tag(8), ort: 'Jugendraum', info: 'Planung der nächsten Wochen.', von: '19:30', bis: '21:00', plaetze: '', zielgruppen: grp.slice(-2).concat(['MAK']).join(', ') },
+        { id: 't8', titel: 'MAK-Sitzung', datum: tag(8), ort: 'Jugendraum', info: 'Planung der nächsten Wochen.', von: '19:30', bis: '21:00', plaetze: '', zielgruppen: ab('Pinguine', 2) + ', MAK' },
         { id: 't9', titel: 'SoLa-Vorbereitungstreffen', datum: tag(16), ort: 'Gemeindehaus', info: 'Ort, Programm und Material fürs Sommerlager.', von: '19:00', bis: '', plaetze: '0', zielgruppen: 'Team SoLa' },
         { id: 't10', titel: 'Elternabend zum Jugendwochenende', datum: tag(21), ort: 'Gemeindehaus', info: 'Infos zu Ablauf, Packliste und Kosten.', von: '19:30', bis: '', plaetze: '', zielgruppen: 'Eltern' },
         {
@@ -2704,7 +2708,7 @@
         s('s15', 't4', 'Abbau', '18:00', '20:00', 6, sonntag)
       ],
       Aufgaben: [
-        { id: 'a1', titel: 'Plakate für den Adventsmarkt aufhängen', info: 'Plakate liegen im Gemeindebüro.', frist: plusTage(markt, -14), anzahl: '3', termin_id: 't4', zielgruppen: grp.slice(-2).concat(['MAK']).join(', ') },
+        { id: 'a1', titel: 'Plakate für den Adventsmarkt aufhängen', info: 'Plakate liegen im Gemeindebüro.', frist: plusTage(markt, -14), anzahl: '3', termin_id: 't4', zielgruppen: ab('Pinguine', 2) + ', MAK' },
         { id: 'a2', titel: 'Kuchen für den Adventsmarkt backen', info: 'Bitte Freitagabend oder Samstag bis 13 Uhr im Gemeindehaus abgeben. Gern mit Zettel, was drin ist.', frist: plusTage(markt, -1), anzahl: '10', termin_id: 't4' },
         { id: 'a8', titel: 'Zeltplan fürs Sommerlager erstellen', info: 'Wer schläft wo, welche Zelte brauchen wir?', frist: '', anzahl: '2', termin_id: 't9' },
         { id: 'a9', titel: 'Snacks für die MAK-Sitzung', info: '', frist: '', anzahl: '1', termin_id: 't8' },

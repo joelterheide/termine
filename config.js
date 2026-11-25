@@ -20,7 +20,7 @@ window.HELFERLISTE = {
   // „Pinguine und alle Gruppen, die hier danach stehen“. Ändert sich die Reihenfolge
   // (oder kommt eine Gruppe dazu), passen sich alle Termine mit „ab …“ von selbst an.
   zielgruppen: {
-    gruppen: ['Stachos', 'Barrakudas', 'Belugas', 'Wanderfalken', 'Pinguine', 'Erdmännchen'],
+    gruppen: ['Wanderfalken', 'Belugas', 'Polarwölfe', 'Pinguine', 'Erdmännchen', 'Barrakudas', 'Stachos', 'Wüstenfüchse', 'Grizzlys'],
     teams: ['MAK', 'Team SoLa', 'Leiter', 'Schwarzhalstüchler'],   // Arbeitsgruppen mit eigenen Terminen
     weitere: ['Eltern']               // Zielgruppen außerhalb der Jugend
   },
