@@ -28,18 +28,20 @@ const PASSWORT = 'bitte-aendern';
 // ============ AB HIER NICHTS ÄNDERN NÖTIG ==============
 
 const STANDARD_PASSWORT = 'bitte-aendern';
-const VERSION = 4; // die Website prüft damit, ob diese Datei aktuell ist
+const VERSION = 5; // die Website prüft damit, ob diese Datei aktuell ist
 const ZEITZONE = 'Europe/Berlin';
 
 const TABELLEN = {
   // von/bis: Uhrzeit; bis_datum: letzter Tag bei mehrtägigen Terminen;
   // plaetze: '' = kein Eintragen direkt beim Termin, '0' = beliebig viele, sonst Höchstzahl
   // kategorie: freier Text, z. B. 'Jugend extern' – was die Website daraus macht, entscheidet sie selbst
-  Termine: ['id', 'titel', 'datum', 'ort', 'info', 'bis_datum', 'von', 'bis', 'plaetze', 'kategorie'],
+  // zielgruppen: für wen (z. B. 'Pinguine, MAK'); leer = für alle
+  Termine: ['id', 'titel', 'datum', 'ort', 'info', 'bis_datum', 'von', 'bis', 'plaetze', 'kategorie', 'zielgruppen'],
   Schichten: ['id', 'termin_id', 'station', 'datum', 'von', 'bis', 'anzahl', 'info'],
-  Aufgaben: ['id', 'titel', 'info', 'frist', 'anzahl', 'eltern_id', 'erledigt', 'erledigt_von'],
+  // termin_id: Termin, zu dem die Aufgabe gehört (optional)
+  Aufgaben: ['id', 'titel', 'info', 'frist', 'anzahl', 'eltern_id', 'erledigt', 'erledigt_von', 'zielgruppen', 'termin_id'],
   Eintragungen: ['id', 'bezug', 'name', 'notiz', 'fuer', 'zeitpunkt'],
-  Abstimmungen: ['id', 'titel', 'ort', 'info', 'frist', 'status', 'ergebnis', 'termin_id'],
+  Abstimmungen: ['id', 'titel', 'ort', 'info', 'frist', 'status', 'ergebnis', 'termin_id', 'zielgruppen'],
   Optionen: ['id', 'abstimmung_id', 'datum', 'von'],
   Stimmen: ['id', 'option_id', 'name', 'zeitpunkt']
 };
@@ -162,7 +164,8 @@ const AKTIONEN = {
     const daten = {
       titel: titel, datum: datum, ort: einzeilig_(t.ort, 150), info: mehrzeilig_(t.info, 2000),
       bis_datum: bisDatum, von: zeit.von, bis: zeit.bis, plaetze: plaetze,
-      kategorie: einzeilig_(t.kategorie, 40)
+      kategorie: einzeilig_(t.kategorie, 40),
+      zielgruppen: zielgruppen_(t.zielgruppen)
     };
 
     if (t.id) {
@@ -190,6 +193,8 @@ const AKTIONEN = {
     if (!t) throw fehler_('Termin nicht gefunden.');
     schichtenVon_(ctx.db, t.id).forEach(function (s) { loescheSchicht_(ctx, s); });
     eintragungenVon_(ctx.db, t.id).forEach(function (e) { loesche_(ctx, 'Eintragungen', e); });
+    // Aufgaben dazu bleiben bestehen, gehören dann aber zu keinem Termin mehr
+    ctx.db.Aufgaben.forEach(function (g) { if (g.termin_id === t.id) aendere_(ctx, 'Aufgaben', g, { termin_id: '' }); });
     loesche_(ctx, 'Termine', t);
     return 'Termin gelöscht.';
   },
@@ -203,7 +208,7 @@ const AKTIONEN = {
     const kopie = neu_(ctx, 'Termine', {
       titel: t.titel, datum: datum, ort: t.ort, info: t.info,
       bis_datum: t.bis_datum ? plusTage_(t.bis_datum, versatz) : '', von: t.von, bis: t.bis, plaetze: t.plaetze,
-      kategorie: t.kategorie
+      kategorie: t.kategorie, zielgruppen: t.zielgruppen
     });
     schichtenVon_(ctx.db, t.id).forEach(function (s) {
       let d = s.datum ? plusTage_(s.datum, versatz) : '';
@@ -270,11 +275,19 @@ const AKTIONEN = {
       frist = datum_(g.frist);
       if (!frist) throw fehler_('Bitte ein gültiges Datum für „bis“ angeben.');
     }
-    const daten = { titel: titel, info: mehrzeilig_(g.info, 2000), frist: frist, anzahl: String(zahl_(g.anzahl)) };
+    let terminId = String(g.termin_id || '');
+    if (terminId && !finde_(ctx.db.Termine, terminId)) throw fehler_('Den gewählten Termin gibt es nicht mehr. Bitte Seite neu laden.');
+    const daten = {
+      titel: titel, info: mehrzeilig_(g.info, 2000), frist: frist, anzahl: String(zahl_(g.anzahl)),
+      zielgruppen: zielgruppen_(g.zielgruppen), termin_id: terminId
+    };
     if (g.id) {
       const alt = finde_(ctx.db.Aufgaben, g.id);
       if (!alt) throw fehler_('Aufgabe nicht gefunden.');
-      if (alt.eltern_id) daten.frist = ''; // Unteraufgaben haben keine eigene Frist
+      if (alt.eltern_id) {
+        // Unteraufgaben haben keine eigene Frist, Zielgruppe oder Termin – das gilt von der Hauptaufgabe
+        daten.frist = ''; daten.zielgruppen = ''; daten.termin_id = '';
+      }
       aendere_(ctx, 'Aufgaben', alt, daten);
       // Lesbare Beschreibung in „Eintragungen“ aktuell halten (auch für Unteraufgaben)
       const betroffen = [alt.id].concat(unteraufgabenVon_(ctx.db, alt.id).map(function (u) { return u.id; }));
@@ -298,7 +311,7 @@ const AKTIONEN = {
     if (!titel.length) throw fehler_('Bitte mindestens eine Unteraufgabe angeben.');
     const anzahl = String(zahl_(a.anzahl));
     titel.forEach(function (t) {
-      neu_(ctx, 'Aufgaben', { titel: t, info: '', frist: '', anzahl: anzahl, eltern_id: eltern.id, erledigt: '', erledigt_von: '' });
+      neu_(ctx, 'Aufgaben', { titel: t, info: '', frist: '', anzahl: anzahl, eltern_id: eltern.id, erledigt: '', erledigt_von: '', zielgruppen: '', termin_id: '' });
     });
     return titel.length === 1 ? 'Unteraufgabe angelegt.' : titel.length + ' Unteraufgaben angelegt.';
   },
@@ -356,7 +369,7 @@ const AKTIONEN = {
     const frist = datum_(g.frist);
     if (!frist) throw fehler_('Bitte angeben, bis wann abgestimmt werden kann.');
     if (frist < ctx.opt.heute) throw fehler_('„Abstimmen bis“ liegt in der Vergangenheit.');
-    const daten = { titel: titel, ort: einzeilig_(g.ort, 150), info: mehrzeilig_(g.info, 2000), frist: frist };
+    const daten = { titel: titel, ort: einzeilig_(g.ort, 150), info: mehrzeilig_(g.info, 2000), frist: frist, zielgruppen: zielgruppen_(g.zielgruppen) };
 
     const neueOptionen = [];
     (g.optionen || []).forEach(function (x) {
@@ -464,7 +477,7 @@ function festlegen_(ctx, p, optionId) {
   // sind direkt beim Termin eingetragen. Andere können sich dazu eintragen, jeder kann absagen.
   const t = neu_(ctx, 'Termine', {
     titel: p.titel, datum: gewinner.datum, ort: p.ort, info: p.info,
-    bis_datum: '', von: gewinner.von, bis: '', plaetze: '0', kategorie: ''
+    bis_datum: '', von: gewinner.von, bis: '', plaetze: '0', kategorie: '', zielgruppen: p.zielgruppen || ''
   });
   const fuer = beschreibung_(ctx.db, t.id);
   stimmenVon_(ctx.db, gewinner.id)
@@ -476,6 +489,17 @@ function festlegen_(ctx, p, optionId) {
 
   aendere_(ctx, 'Abstimmungen', p, { status: 'festgelegt', ergebnis: gewinner.id, termin_id: t.id });
   return t;
+}
+
+/** 'Pinguine,  MAK , pinguine' oder ['Pinguine', 'MAK'] → 'Pinguine, MAK' (leer = für alle) */
+function zielgruppen_(w) {
+  const liste = Array.isArray(w) ? w : String(w == null ? '' : w).split(',');
+  const aus = [];
+  liste.forEach(function (x) {
+    const n = einzeilig_(x, 40).replace(/^[=+\-@]+/, '').trim();
+    if (n && !aus.some(function (y) { return y.toLowerCase() === n.toLowerCase(); })) aus.push(n);
+  });
+  return aus.slice(0, 30).join(', ');
 }
 
 function heuteLokal_() {

@@ -18,6 +18,33 @@
     try { if (v) window[art].setItem(k, v); else window[art].removeItem(k); } catch (e) { /* egal */ }
   }
 
+  // ---------- Zielgruppen („Für wen?“) aus config.js ----------
+
+  var ZG = (function () {
+    var k = KONF.zielgruppen || {};
+    function liste(x) {
+      return (Array.isArray(x) ? x : []).map(function (n) { return String(n).trim(); }).filter(Boolean);
+    }
+    // ohne eigenen Eintrag in config.js: die Putzdienst-Gruppen und „Eltern“
+    var gruppen = KONF.zielgruppen ? liste(k.gruppen) : liste((KONF.putzdienst || {}).gruppen);
+    var teams = liste(k.teams);
+    var weitere = KONF.zielgruppen ? liste(k.weitere) : (gruppen.length ? ['Eltern'] : []);
+    return { gruppen: gruppen, teams: teams, weitere: weitere, alle: gruppen.concat(teams, weitere) };
+  })();
+
+  function zgListe(w) {
+    return String(w == null ? '' : w).split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+  }
+  function istGleich(a, b) { return String(a).toLowerCase() === String(b).toLowerCase(); }
+
+  // Profil: null = noch nicht gewählt, [] = alles anzeigen, sonst die gewählten Zielgruppen
+  function leseProfil() {
+    try {
+      var p = JSON.parse(lies('localStorage', 'helferliste.profil') || 'null');
+      return Array.isArray(p) ? p.map(String).filter(Boolean) : null;
+    } catch (e) { return null; }
+  }
+
   // ---------- Zustand ----------
 
   var z = {
@@ -34,8 +61,32 @@
     springeZu: '',
     externAus: lies('localStorage', 'helferliste.externAus') === '1', // „Jugend extern“ ausblenden
     aufgeklappt: {},      // aufgeklappte Termine „Jugend extern“ (id → true)
-    trotzdem: ''          // ausgeblendeter Termin, der per Link geöffnet wurde
+    trotzdem: '',         // ausgeblendeter Termin/Aufgabe/Abstimmung, der per Link geöffnet wurde
+    profil: leseProfil()  // für wen der Jahresplan angezeigt wird
   };
+
+  function setzeProfil(liste) {
+    // Namen wie in config.js schreiben (Groß-/Kleinschreibung), unbekannte beibehalten
+    z.profil = liste.map(function (n) {
+      return ZG.alle.filter(function (b) { return istGleich(b, n); })[0] || n;
+    });
+    z.trotzdem = '';
+    merke('localStorage', 'helferliste.profil', JSON.stringify(z.profil));
+  }
+
+  // Link mit ?fuer=Eltern (oder ?fuer=Pinguine,Team%20SoLa) stellt die Auswahl gleich ein
+  (function () {
+    try {
+      var u = new URL(location.href);
+      var f = u.searchParams.get('fuer');
+      if (f === null) return;
+      var liste = zgListe(f);
+      if (liste.length === 1 && /^alle?$/i.test(liste[0])) liste = [];
+      setzeProfil(liste);
+      u.searchParams.delete('fuer');
+      history.replaceState(null, '', u.pathname + u.search + u.hash);
+    } catch (e) { /* egal */ }
+  })();
 
   var backend = KONF.api ? apiBackend(String(KONF.api).trim()) : demoBackend();
 
@@ -231,6 +282,8 @@
         plaetze: plaetze,
         kategorie: t.kategorie || '',
         extern: istExtern(t),
+        zg: zgListe(t.zielgruppen),
+        aufgaben: [],         // zugeordnete Aufgaben (unten ergänzt)
         leute: direkt,
         direkt: plaetze !== '' || direkt.length > 0,
         schichten: schichten,
@@ -254,11 +307,17 @@
       // Die ganze Aufgabe ist erst erledigt, wenn sie selbst abgehakt ist –
       // abgehakte Unteraufgaben zählen nur als Fortschritt.
       g.fertig = !!g.erledigt;
+      // Zugeordneter Termin; ohne eigenes „Für wen?“ gilt das des Termins
+      g.termin = g.termin_id ? finde(termine, g.termin_id) : null;
+      g.zgEigen = zgListe(g.zielgruppen);
+      g.zg = g.zgEigen.length ? g.zgEigen : (g.termin ? g.termin.zg : []);
+      g.bisWann = g.frist || (g.termin ? g.termin.von : '');
     });
     aufgaben.sort(function (a, b) {
-      if (a.frist && b.frist) return a.frist.localeCompare(b.frist);
-      return a.frist ? -1 : b.frist ? 1 : 0;
+      if (a.bisWann && b.bisWann) return a.bisWann.localeCompare(b.bisWann);
+      return a.bisWann ? -1 : b.bisWann ? 1 : 0;
     });
+    aufgaben.forEach(function (g) { if (g.termin) g.termin.aufgaben.push(g); });
 
     var stimmen = {};
     d.Stimmen.forEach(function (v) { (stimmen[v.option_id] = stimmen[v.option_id] || []).push(v); });
@@ -269,7 +328,7 @@
       });
       optionen.sort(function (a, b) { return (a.datum + ' ' + a.von) < (b.datum + ' ' + b.von) ? -1 : 1; });
       var meiste = optionen.reduce(function (m, o) { return Math.max(m, o.stimmen.length); }, 0);
-      return Object.assign({}, p, { optionen: optionen, meiste: meiste });
+      return Object.assign({}, p, { optionen: optionen, meiste: meiste, zg: zgListe(p.zielgruppen) });
     });
     abstimmungen.sort(function (a, b) { return String(a.frist).localeCompare(String(b.frist)); });
 
@@ -277,17 +336,28 @@
   }
 
   function istVorbei(termin) { return termin.bis && termin.bis < heute(); }
-  function istAbgelaufen(aufgabe) { return aufgabe.frist && aufgabe.frist < heute(); }
+  // Aufgabe mit Frist: nach der Frist; ohne Frist, aber zu einem Termin: nach dem Termin
+  function istAbgelaufen(aufgabe) {
+    if (aufgabe.frist) return aufgabe.frist < heute();
+    return !!(aufgabe.termin && istVorbei(aufgabe.termin));
+  }
 
   function kommendeTermine() { return z.sicht.termine.filter(function (t) { return !istVorbei(t); }); }
 
   // „Jugend extern“: wird eingeklappt und ohne Farbe gezeigt und lässt sich ganz ausblenden
   var EXTERN = 'Jugend extern';
   function istExtern(t) { return /jugend\s*extern/i.test(String(t.kategorie || '')); }
-  function sichtbar(t) { return !t.extern || !z.externAus || z.trotzdem === t.id; }
+  // Passt ein Eintrag zur Auswahl „Für wen?“? Leer = für alle; die Verwaltung sieht alles.
+  function profilAktiv() { return !admin() && !!z.profil && z.profil.length > 0; }
+  function passt(liste) {
+    if (!liste || !liste.length || !profilAktiv()) return true;
+    return liste.some(function (x) { return z.profil.some(function (p) { return istGleich(p, x); }); });
+  }
+  function sichtbar(t) { return z.trotzdem === t.id || ((!t.extern || !z.externAus) && passt(t.zg)); }
+  function aufgabeSichtbar(g) { return z.trotzdem === g.id || passt(g.zg); }
   function sichtbareTermine() { return kommendeTermine().filter(sichtbar); }
-  function offeneAufgaben() { return z.sicht.aufgaben.filter(function (g) { return !istAbgelaufen(g) && !g.fertig; }); }
-  function erledigteAufgaben() { return z.sicht.aufgaben.filter(function (g) { return !istAbgelaufen(g) && g.fertig; }); }
+  function offeneAufgaben() { return z.sicht.aufgaben.filter(function (g) { return aufgabeSichtbar(g) && !istAbgelaufen(g) && !g.fertig; }); }
+  function erledigteAufgaben() { return z.sicht.aufgaben.filter(function (g) { return aufgabeSichtbar(g) && !istAbgelaufen(g) && g.fertig; }); }
   function erledigtText(x) {
     return 'am ' + datumKurz(x.erledigt) + (x.erledigt_von ? ' von ' + x.erledigt_von : '');
   }
@@ -392,6 +462,7 @@
     unter.hidden = !KONF.untertitel;
 
     document.getElementById('hinweis').innerHTML = hinweisHtml();
+    setzeInhalt(profilElement(), profilHtml());
     document.getElementById('reiter').innerHTML = reiterHtml();
     setzeInhalt(document.getElementById('fuss'), fussHtml());
 
@@ -418,6 +489,93 @@
         setTimeout(function () { ziel.classList.remove('markiert'); }, 1800);
       }
     }
+  }
+
+  function profilElement() {
+    var el = document.getElementById('profil');
+    if (!el) { // ältere index.html im Browser-Speicher
+      el = document.createElement('div');
+      el.id = 'profil';
+      var r = document.getElementById('reiter');
+      r.parentNode.insertBefore(el, r);
+    }
+    return el;
+  }
+
+  // Auswahl „Für wen soll der Jahresplan sein?“ – beim ersten Öffnen und über „ändern“
+  function profilHtml() {
+    if (!ZG.alle.length || !z.sicht) return '';
+    var erstes = z.profil === null;
+    if (!erstes && !istOffen('profil')) {
+      var text = z.profil.length ? z.profil.join(', ') : 'alle';
+      return '<p class="profil-zeile">Jahresplan für: <strong>' + esc(text) + '</strong> · ' +
+        '<button class="link" data-aktion="profil-aendern">ändern</button>' +
+        (admin() && z.profil.length ? ' <span class="leise">(als Verwaltung siehst du trotzdem alles)</span>' : '') + '</p>';
+    }
+    var gewaehlt = z.profil || [];
+    function boxen(titel, namen) {
+      if (!namen.length) return '';
+      return '<div class="fuer-teil"><span class="fuer-titel">' + titel + '</span>' + namen.map(function (n) {
+        var an = gewaehlt.some(function (p) { return istGleich(p, n); });
+        return '<label class="wahl-box"><input type="checkbox" name="fuer" value="' + esc(n) + '"' + (an ? ' checked' : '') + '> ' + esc(n) + '</label>';
+      }).join('') + '</div>';
+    }
+    return '<form class="kasten profil" data-form="profil">' +
+      '<h3>' + (erstes ? 'Für wen soll der Jahresplan sein?' : 'Jahresplan anpassen') + '</h3>' +
+      '<p class="tipp">Du siehst dann nur die Termine und Aufgaben, die dich betreffen. Mehrere Häkchen sind möglich. ' +
+      'Die Auswahl gilt nur in diesem Browser und lässt sich oben jederzeit ändern.</p>' +
+      boxen('Gruppe', ZG.gruppen) + boxen('Team', ZG.teams) + boxen('Sonstige', ZG.weitere) +
+      '<div class="knoepfe"><button type="submit" class="haupt">Übernehmen</button>' +
+      '<button type="button" data-aktion="profil-alles">Alles anzeigen</button>' +
+      (erstes ? '' : '<button type="button" data-aktion="schliessen">Abbrechen</button>') + '</div>' +
+      (erstes ? '' : '<p class="tipp profil-link">Link, der den Jahresplan gleich mit dieser Auswahl öffnet (z. B. für Eltern): ' +
+        '<button type="button" class="link" data-aktion="profil-link">Link kopieren</button></p>') +
+      '</form>';
+  }
+
+  // Kleines Etikett „für Pinguine, MAK“ bei eingeschränkten Einträgen
+  function zgEtikett(liste) {
+    if (!liste || !liste.length) return '';
+    var text = liste;
+    // alle Gruppen angehakt → kurz „alle Gruppen“
+    var alleGruppen = ZG.gruppen.length > 1 && ZG.gruppen.every(function (n) { return liste.some(function (x) { return istGleich(x, n); }); });
+    if (alleGruppen) {
+      text = ['alle Gruppen'].concat(liste.filter(function (x) { return !ZG.gruppen.some(function (n) { return istGleich(n, x); }); }));
+    }
+    return ' <span class="etikett fuer">für ' + esc(text.join(', ')) + '</span>';
+  }
+
+  // Feld „Für wen?“ in den Verwaltungsformularen
+  function fuerFeld(liste, hinweis) {
+    if (!ZG.alle.length) return '';
+    liste = liste || [];
+    var extra = liste.filter(function (x) { return !ZG.alle.some(function (b) { return istGleich(b, x); }); });
+    function box(n) {
+      var an = liste.some(function (x) { return istGleich(x, n); });
+      return '<label class="wahl-box"><input type="checkbox" name="fuer" value="' + esc(n) + '"' + (an ? ' checked' : '') + '> ' + esc(n) + '</label>';
+    }
+    function teil(titel, namen) {
+      return namen.length ? '<div class="fuer-teil"><span class="fuer-titel">' + titel + '</span>' + namen.map(box).join('') + '</div>' : '';
+    }
+    return '<fieldset class="fuer"><legend>Für wen?</legend>' +
+      '<span class="tipp">' + (hinweis || 'Nichts angehakt = für alle (auch Eltern).') + '</span>' +
+      teil('Gruppen', ZG.gruppen) + teil('Teams', ZG.teams) + teil('Sonstige', ZG.weitere.concat(extra)) +
+      (ZG.gruppen.length > 1 ? '<div class="fuer-schnell">Schnell: <button type="button" class="link" data-aktion="fuer-jugend">alle Gruppen</button>' +
+        '<span class="trenn"> · </span><span class="ab-wahl">ab <select name="fuer_ab" aria-label="ab Gruppe"><option value="">Gruppe …</option>' +
+        ZG.gruppen.map(function (n, i) { return '<option value="' + i + '">' + esc(n) + '</option>'; }).join('') + '</select></span>' +
+        '<span class="trenn"> · </span><button type="button" class="link" data-aktion="fuer-keine">für alle</button></div>' : '') +
+      '</fieldset>';
+  }
+
+  function fuerAuswahl(f) {
+    return Array.prototype.filter.call(f.querySelectorAll('input[name=fuer]'), function (el) { return el.checked; })
+      .map(function (el) { return el.value; });
+  }
+
+  // Hinweis im Formular, solange bei Google noch eine ältere Code.gs läuft
+  function veraltetHinweis(minVersion, was) {
+    if (backend.demo || !z.version || z.version >= minVersion) return '';
+    return '<p class="warnung">' + was + ' erst gespeichert, wenn die neue Code.gs in Apps Script eingefügt und neu bereitgestellt ist.</p>';
   }
 
   function hinweisHtml() {
@@ -468,11 +626,16 @@
   // ---------- Termine ----------
 
   function termineHtml() {
-    // Link auf einen Termin „Jugend extern“: aufklappen und auch zeigen, wenn ausgeblendet
-    var ziel = z.springeZu && finde(z.sicht.termine, z.springeZu.replace(/^t-/, ''));
-    if (ziel && ziel.extern) {
-      z.aufgeklappt[ziel.id] = true;
-      if (z.externAus) z.trotzdem = ziel.id;
+    // Link auf einen Termin oder eine Abstimmung: auch zeigen, wenn ausgeblendet; „Jugend extern“ aufklappen
+    if (z.springeZu) {
+      var zid = z.springeZu.replace(/^[tp]-/, '');
+      var ziel = finde(z.sicht.termine, zid);
+      if (ziel) {
+        if (ziel.extern) z.aufgeklappt[ziel.id] = true;
+        if (!sichtbar(ziel)) z.trotzdem = ziel.id;
+      }
+      var zielP = finde(z.sicht.abstimmungen, zid);
+      if (zielP && !passt(zielP.zg)) z.trotzdem = zielP.id;
     }
     if (z.ansicht === 'tabelle') return ansichtHtml() + (istOffen('kalender') ? kalenderFormular() : '') + tabelleHtml();
     var kommend = sichtbareTermine();
@@ -626,6 +789,10 @@
     return m ? 'ab ' + m[1] : '';
   }
 
+  function meinePutzGruppe(name) {
+    return !!z.profil && z.profil.some(function (p) { return istGleich(p, name); });
+  }
+
   function tabelleHtml() {
     if (KONF.ferien && !ferien.geladen && !ferien.laedt) ladeFerien();
     var h0 = heute();
@@ -651,7 +818,8 @@
     for (var jm = start; jm <= ende; jm = monatPlus(jm, 1)) {
       var putz = putzdienst(jm);
       h += '<tr class="monat-zeile"><th colspan="3" scope="colgroup">' + MONAT[+jm.slice(5, 7) - 1] + ' ' + jm.slice(0, 4) +
-        (putz ? '<span class="putz">Putzdienst: ' + esc(putz) + '</span>' : '') + '</th></tr>';
+        (putz ? '<span class="putz' + (meinePutzGruppe(putz) ? ' meins' : '') + '">Putzdienst: ' + esc(putz) +
+          (meinePutzGruppe(putz) ? ' – deine Gruppe' : '') + '</span>' : '') + '</th></tr>';
       var liste = (proMonat[jm] || []).sort(function (a, b) { return a.sort < b.sort ? -1 : a.sort > b.sort ? 1 : 0; });
       if (!liste.length) h += '<tr class="leer-zeile"><td colspan="3">keine Termine</td></tr>';
       liste.forEach(function (e) {
@@ -660,7 +828,7 @@
         } else {
           h += '<tr' + (e.t.extern ? ' class="extern"' : '') + '><td class="u-datum">' + esc(spanne(e.t.von, e.t.bis)) + '</td><td class="u-zeit">' + esc(terminZeit(e.t)) + '</td>' +
             '<td><a href="#t-' + esc(e.t.id) + '">' + esc(e.t.titel) + '</a>' +
-            (e.t.extern ? ' <span class="etikett">' + EXTERN + '</span>' : '') + '</td></tr>';
+            (e.t.extern ? ' <span class="etikett">' + EXTERN + '</span>' : '') + zgEtikett(e.t.zg) + '</td></tr>';
         }
       });
     }
@@ -680,6 +848,7 @@
   function abstimmungenHtml() {
     var h = '';
     z.sicht.abstimmungen.forEach(function (p) {
+      if (!passt(p.zg) && z.trotzdem !== p.id) return;
       if (!p.status) { h += abstimmungHtml(p); return; }
       var loeschen = admin() ? ' · <button class="link" data-aktion="abstimmung-loeschen" data-id="' + esc(p.id) + '">Abstimmung entfernen</button>' : '';
       if (p.status === 'festgelegt') {
@@ -705,7 +874,7 @@
     } else {
       var n = tageBis(p.frist);
       var noch = n === 0 ? 'heute letzter Tag' : n === 1 ? 'noch bis morgen' : n > 1 ? 'noch ' + n + ' Tage' : '';
-      h += '<div class="t-datum">Abstimmung bis ' + esc(datumLang(p.frist)) + (noch ? ' · ' + noch : '') + '</div>';
+      h += '<div class="t-datum">Abstimmung bis ' + esc(datumLang(p.frist)) + (noch ? ' · ' + noch : '') + zgEtikett(p.zg) + '</div>';
       h += '<h2>' + esc(p.titel) + '</h2>';
       if (p.ort) h += '<div class="t-ort">' + esc(p.ort) + '</div>';
       if (p.info) h += '<p class="info">' + mitLinks(p.info) + '</p>';
@@ -761,10 +930,12 @@
     var zeilen = (z.offen && z.offen.zeilen) || (p.id ? 1 : 3);
     var h = '<form class="kasten" data-form="abstimmung" data-id="' + esc(p.id || '') + '">' +
       '<h3>' + (p.id ? 'Abstimmung bearbeiten' : 'Neue Terminabstimmung') + '</h3>' +
+      veraltetHinweis(5, '„Für wen?“ wird') +
       '<label>Titel des Termins<input name="titel" required maxlength="120" value="' + esc(p.titel || '') + '" placeholder="z. B. Sommerfest"></label>' +
       '<div class="reihe"><label>Ort<input name="ort" maxlength="150" value="' + esc(p.ort || '') + '" placeholder="optional"></label>' +
       '<label>Abstimmen bis<input type="date" name="frist" required value="' + esc(p.frist || plusTage(heute(), 7)) + '"></label></div>' +
       '<label>Info<textarea name="info" rows="2" maxlength="2000" placeholder="optional">' + esc(p.info || '') + '</textarea></label>' +
+      fuerFeld(p.zg, 'Nichts angehakt = für alle (auch Eltern). Der festgelegte Termin übernimmt die Auswahl.') +
       '<fieldset class="optionen"><legend>' + (p.id ? 'Weitere mögliche Termine hinzufügen' : 'Mögliche Termine') + '</legend>';
     for (var i = 0; i < zeilen; i++) {
       h += '<div class="reihe"><label>Datum<input type="date" name="odatum_' + i + '"></label>' +
@@ -811,7 +982,7 @@
       var uhr = uhrText(t);
       h += '<div class="t-kopf">';
       h += '<div class="t-datum">' + esc(zeitraum(t.von, t.bis)) + (uhr ? ' · ' + esc(uhr) : '') + (rel ? ' · ' + rel : '') +
-        (t.extern ? ' · <span class="etikett">' + EXTERN + '</span>' : '') + '</div>';
+        (t.extern ? ' · <span class="etikett">' + EXTERN + '</span>' : '') + zgEtikett(t.zg) + '</div>';
       h += '<h2>' + esc(t.titel) + '</h2>';
       if (t.ort) h += '<div class="t-ort">' + esc(t.ort) + '</div>';
       h += '</div>';
@@ -820,6 +991,8 @@
 
     if (t.direkt) h += '<div class="schichten">' + direktZeile(t, vorbei) + '</div>';
     h += schichtenHtml(t);
+    h += terminAufgabenHtml(t);
+    if (istOffen('aufgabe', '', t.id)) h += aufgabeFormular(null, t.id);
     if (istOffen('schicht', '', t.id)) h += schichtFormular(t, null);
     if (istOffen('kopieren', t.id)) h += kopierFormular(t);
 
@@ -830,11 +1003,28 @@
     if (admin()) {
       links.push('<button class="link" data-aktion="termin-bearbeiten" data-id="' + esc(t.id) + '">Bearbeiten</button>');
       links.push('<button class="link" data-aktion="schicht-neu" data-termin="' + esc(t.id) + '">Schichten hinzufügen</button>');
+      links.push('<button class="link" data-aktion="aufgabe-dazu" data-termin="' + esc(t.id) + '">+ Aufgabe dazu</button>');
       links.push('<button class="link" data-aktion="termin-kopieren" data-id="' + esc(t.id) + '">Kopieren</button>');
       links.push('<button class="link" data-aktion="termin-loeschen" data-id="' + esc(t.id) + '">Löschen</button>');
     }
     if (links.length) h += '<div class="t-links">' + links.join('<span class="trenn"> · </span>') + '</div>';
     return h + '</section>';
+  }
+
+  // Zugeordnete Aufgaben beim Termin, mit Stand und Link zur Aufgabe
+  function terminAufgabenHtml(t) {
+    var liste = t.aufgaben.filter(aufgabeSichtbar);
+    if (!liste.length) return '';
+    return '<div class="t-aufgaben"><span class="t-aufgaben-titel">Aufgaben dazu</span><ul>' + liste.map(function (g) {
+      var alleLeute = g.unter.reduce(function (l, u) { return l.concat(u.leute); }, g.leute);
+      var dabei = alleLeute.some(function (e) { return ich(e.name); });
+      var stand;
+      if (g.fertig) stand = 'erledigt';
+      else if (g.unter.length) stand = g.erledigtZahl + ' von ' + g.unter.length + ' erledigt';
+      else stand = g.leute.length + '/' + (zahl(g.anzahl) || '∞');
+      return '<li' + (g.fertig ? ' class="fertig"' : '') + '><a href="#a-' + esc(g.id) + '">' + esc(g.titel) + '</a>' +
+        ' <span class="leise">' + esc(stand) + '</span>' + (dabei ? ' <span class="dabei">du bist dabei</span>' : '') + '</li>';
+    }).join('') + '</ul></div>';
   }
 
   // „14:00–16:00 Uhr“ oder „19:00 Uhr“
@@ -961,10 +1151,16 @@
   // ---------- Aufgaben ----------
 
   function aufgabenHtml() {
+    // Link auf eine ausgeblendete Aufgabe: trotzdem zeigen
+    if (z.springeZu) {
+      var ziel = finde(z.sicht.aufgaben, z.springeZu.replace(/^a-/, ''));
+      if (ziel && !aufgabeSichtbar(ziel)) z.trotzdem = ziel.id;
+    }
     var liste = offeneAufgaben();
     var erledigt = erledigteAufgaben();
-    var abgelaufen = z.sicht.aufgaben.filter(istAbgelaufen);
-    var h = alsHtml() + '<div class="leiste"><span class="leise">Aufgaben ohne festen Termin</span>' +
+    var abgelaufen = z.sicht.aufgaben.filter(istAbgelaufen).filter(aufgabeSichtbar);
+    if (z.springeZu && abgelaufen.some(function (g) { return 'a-' + g.id === z.springeZu; })) z.vergangene = true;
+    var h = alsHtml() + '<div class="leiste"><span class="leise">Aufgaben zum Mithelfen</span>' +
       (admin() ? '<button data-aktion="aufgabe-neu">+ Neue Aufgabe</button>' : '') + '</div>';
     if (istOffen('aufgabe', '')) h += aufgabeFormular(null);
     if (!liste.length) h += '<p class="leer">Gerade keine offenen Aufgaben.</p>';
@@ -994,10 +1190,12 @@
     if (istOffen('aufgabe', g.id)) return h + aufgabeFormular(g) + '</section>';
 
     h += '<h2>' + esc(g.titel) + '</h2>';
-    if (g.frist) {
-      var rel = vorbei || g.fertig ? '' : relativ(g.frist);
-      h += '<div class="t-datum">bis ' + esc(datumLang(g.frist)) + (rel ? ' · ' + rel : '') + '</div>';
-    }
+    var wann = [];
+    if (g.frist) wann.push('bis ' + esc(datumLang(g.frist)));
+    if (g.termin) wann.push('zu <a href="#t-' + esc(g.termin.id) + '">' + esc(g.termin.titel) + '</a> am ' + esc(datumKurz(g.termin.von)));
+    var rel = vorbei || g.fertig || !g.bisWann ? '' : relativ(g.bisWann);
+    if (rel) wann.push(rel);
+    if (wann.length || g.zg.length) h += '<div class="t-datum">' + wann.join(' · ') + zgEtikett(g.zg) + '</div>';
     if (g.info) h += '<p class="info">' + mitLinks(g.info) + '</p>';
     if (g.unter.length) {
       h += '<div class="fortschritt">' + g.erledigtZahl + ' von ' + g.unter.length +
@@ -1119,12 +1317,11 @@
     t = t || {};
     var direkt = t.id ? t.plaetze !== '' : true; // neue Termine: Eintragen direkt beim Termin vorausgewählt
     var zeit = t.uhrVon ? t.uhrVon + (t.uhrBis ? '–' + t.uhrBis : '') : '';
-    var veraltet = !backend.demo && z.version > 0 && z.version < 4;
+    var fehlt = z.version < 3 ? 'Uhrzeit, Bis-Datum, Eintragen beim Termin, „' + EXTERN + '“ und „Für wen?“ werden'
+      : z.version < 4 ? '„' + EXTERN + '“ und „Für wen?“ werden' : '„Für wen?“ wird';
     return '<form class="kasten" data-form="termin" data-id="' + esc(t.id || '') + '">' +
       '<h3>' + (t.id ? 'Termin bearbeiten' : 'Neuer Termin') + '</h3>' +
-      (veraltet ? '<p class="warnung">' + (z.version < 3 ? 'Uhrzeit, Bis-Datum, Eintragen beim Termin und „' + EXTERN + '“ werden'
-        : '„' + EXTERN + '“ wird') + ' erst gespeichert, wenn die neue ' +
-        'Code.gs in Apps Script eingefügt und neu bereitgestellt ist.</p>' : '') +
+      veraltetHinweis(5, fehlt) +
       '<label>Titel<input name="titel" required maxlength="120" value="' + esc(t.titel || '') + '" placeholder="z. B. Adventsmarkt"></label>' +
       '<div class="reihe"><label>Datum<input type="date" name="datum" required value="' + esc(t.datum || '') + '"></label>' +
       '<label>Bis<input type="date" name="bis_datum" value="' + esc(t.bis_datum || '') + '"><span class="tipp">optional, nur bei mehreren Tagen</span></label></div>' +
@@ -1132,6 +1329,7 @@
       '<span class="tipp">optional</span></label>' +
       '<label>Ort<input name="ort" maxlength="150" value="' + esc(t.ort || '') + '" placeholder="optional"></label></div>' +
       '<label>Info<textarea name="info" rows="3" maxlength="2000" placeholder="optional">' + esc(t.info || '') + '</textarea></label>' +
+      fuerFeld(t.zg) +
       '<label class="haken-zeile extern-haken"><input type="checkbox" name="extern"' + (t.extern ? ' checked' : '') + '> ' + EXTERN +
       '<span class="tipp">wird eingeklappt und ohne Farbe angezeigt und lässt sich ausblenden</span></label>' +
       '<div class="reihe"><label class="haken-zeile"><input type="checkbox" name="direkt"' + (direkt ? ' checked' : '') + '> Direkt beim Termin eintragen</label>' +
@@ -1177,11 +1375,19 @@
       '<span class="tipp leise klein">Alle Schichten werden mitkopiert, die Eintragungen nicht.</span></form>';
   }
 
-  function aufgabeFormular(g) {
+  function aufgabeFormular(g, terminVorwahl) {
     g = g || {};
     var unter = !!g.eltern_id;
-    return '<form class="kasten" data-form="aufgabe" data-id="' + esc(g.id || '') + '">' +
+    var terminId = g.id ? g.termin_id || '' : terminVorwahl || '';
+    // Termine zur Auswahl: kommende, dazu der bisher zugeordnete
+    var termine = z.sicht.termine.filter(function (t) { return !istVorbei(t) || t.id === terminId; });
+    var terminWahl = unter ? '' : '<label>Gehört zu Termin<select name="termin_id"><option value="">– keinem –</option>' +
+      termine.map(function (t) {
+        return '<option value="' + esc(t.id) + '"' + (t.id === terminId ? ' selected' : '') + '>' + esc(datumKurz(t.von) + ' · ' + t.titel) + '</option>';
+      }).join('') + '</select><span class="tipp">optional – die Aufgabe steht dann auch beim Termin</span></label>';
+    return '<form class="kasten" data-form="aufgabe" data-id="' + esc(g.id || '') + '"' + (terminVorwahl ? ' data-termin="' + esc(terminVorwahl) + '"' : '') + '>' +
       '<h3>' + (unter ? 'Unteraufgabe bearbeiten' : g.id ? 'Aufgabe bearbeiten' : 'Neue Aufgabe') + '</h3>' +
+      (unter ? '' : veraltetHinweis(5, '„Für wen?“ und „Gehört zu Termin“ werden')) +
       '<label>Titel<input name="titel" required maxlength="120" value="' + esc(g.titel || '') + '" placeholder="z. B. Kuchen backen"></label>' +
       (unter
         ? '<label>Hinweis<input name="info" maxlength="300" value="' + esc(g.info || '') + '" placeholder="optional"></label>'
@@ -1190,6 +1396,8 @@
       (unter ? '' : '<label>Erledigen bis<input type="date" name="frist" value="' + esc(g.frist || '') + '"><span class="tipp">optional</span></label>') +
       '<label>Wie viele Helfer?<input type="number" name="anzahl" min="0" max="999" inputmode="numeric" value="' + esc(g.id ? zahl(g.anzahl) : 1) + '">' +
       '<span class="tipp">0 = beliebig viele</span></label></div>' +
+      terminWahl +
+      (unter ? '' : fuerFeld(g.zgEigen, 'Nichts angehakt = für alle – oder für die, für die der zugeordnete Termin ist.')) +
       '<div class="knoepfe"><button type="submit" class="haupt">Speichern</button>' +
       '<button type="button" data-aktion="schliessen">Abbrechen</button></div></form>';
   }
@@ -1201,7 +1409,9 @@
     document.querySelectorAll('form[data-form]').forEach(function (f) {
       var w = {};
       Array.prototype.forEach.call(f.elements, function (el) {
-        if (el.name) w[el.name] = el.type === 'checkbox' ? el.checked : el.value;
+        if (!el.name) return;
+        if (el.type === 'checkbox') w[el.name + '=' + el.value] = el.checked;
+        else w[el.name] = el.value;
       });
       gemerkt[formSchluessel(f)] = w;
     });
@@ -1233,9 +1443,11 @@
       var w = gemerkt[formSchluessel(f)];
       if (!w) return;
       Array.prototype.forEach.call(f.elements, function (el) {
-        if (!el.name || !Object.prototype.hasOwnProperty.call(w, el.name)) return;
-        if (el.type === 'checkbox') el.checked = !!w[el.name];
-        else el.value = w[el.name];
+        if (!el.name) return;
+        var k = el.type === 'checkbox' ? el.name + '=' + el.value : el.name;
+        if (!Object.prototype.hasOwnProperty.call(w, k)) return;
+        if (el.type === 'checkbox') el.checked = !!w[k];
+        else el.value = w[k];
       });
     });
   }
@@ -1516,7 +1728,7 @@
   // Termine ab Stichtag, wahlweise ohne „Jugend extern“
   function kalenderAuswahl(ab, ohneExtern) {
     return z.sicht.termine.filter(function (t) {
-      return t.von && (t.bis || t.von) >= ab && !(ohneExtern && t.extern);
+      return t.von && (t.bis || t.von) >= ab && !(ohneExtern && t.extern) && passt(t.zg);
     });
   }
 
@@ -1529,6 +1741,7 @@
       '<h3>Termine in den Kalender übernehmen</h3>' +
       '<div class="reihe"><label>Ab<input type="date" name="ab" required value="' + esc(ab) + '"></label><span class="lueckenfueller"></span></div>' +
       (gibtExtern ? '<label class="haken-zeile extern-haken"><input type="checkbox" name="ohne_extern"' + (ohne ? ' checked' : '') + '> ohne „' + EXTERN + '“</label>' : '') +
+      (profilAktiv() ? '<p class="tipp">Nur Termine für: ' + esc(z.profil.join(', ')) + ' (deine Auswahl oben).</p>' : '') +
       '<p class="tipp">Lädt eine Kalenderdatei (.ics) herunter. Am Handy einfach öffnen, bei Google Kalender am Computer unter ' +
       '„Einstellungen → Importieren“. Spätere Änderungen kommen nicht automatisch mit – dann die Datei neu herunterladen.</p>' +
       '<div class="knoepfe"><button type="submit" class="haupt">' + kalenderKnopf(n) + '</button>' +
@@ -1862,6 +2075,47 @@
         oeffne({ art: 'kalender' }, 'form[data-form=kalender] input[name=ab]');
         break;
 
+      case 'profil-aendern':
+        oeffne({ art: 'profil' }, 'form[data-form=profil] input');
+        break;
+
+      case 'profil-alles':
+        setzeProfil([]);
+        z.offen = null;
+        render();
+        zeigeMeldung('Du siehst jetzt alle Termine und Aufgaben.');
+        break;
+
+      case 'profil-link': {
+        var pf = el.closest('form');
+        var auswahl = pf ? fuerAuswahl(pf) : [];
+        var link = location.origin + location.pathname + '?fuer=' + encodeURIComponent(auswahl.length ? auswahl.join(',') : 'alle');
+        var fertigText = 'Link kopiert – er öffnet den Jahresplan für: ' + (auswahl.length ? auswahl.join(', ') : 'alle');
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(link).then(function () { zeigeMeldung(fertigText); }, function () { zeigeMeldung(link); });
+        } else {
+          zeigeMeldung(link);
+        }
+        break;
+      }
+
+      case 'fuer-jugend':
+      case 'fuer-keine': {
+        var ff = el.closest('form');
+        if (!ff) break;
+        Array.prototype.forEach.call(ff.querySelectorAll('input[name=fuer]'), function (box) {
+          var istGruppe = ZG.gruppen.some(function (n) { return istGleich(n, box.value); });
+          if (aktion === 'fuer-keine') box.checked = false;
+          else if (istGruppe) box.checked = true;
+          else if (ZG.weitere.some(function (n) { return istGleich(n, box.value); })) box.checked = false;
+        });
+        break;
+      }
+
+      case 'aufgabe-dazu':
+        oeffne({ art: 'aufgabe', id: '', termin: el.getAttribute('data-termin') }, 'form[data-form=aufgabe] input[name=titel]');
+        break;
+
       case 'extern-filter':
         z.externAus = !z.externAus;
         z.trotzdem = '';
@@ -1909,11 +2163,17 @@
         if (w['odatum_' + i] || w['ozeit_' + i]) optionen.push({ datum: w['odatum_' + i], von: w['ozeit_' + i] });
       }
       verwalten({ aktion: 'abstimmung_speichern', abstimmung: {
-        id: id, titel: w.titel, ort: w.ort, info: w.info, frist: w.frist, optionen: optionen
+        id: id, titel: w.titel, ort: w.ort, info: w.info, frist: w.frist, optionen: optionen,
+        zielgruppen: zielgruppenAus(f, id ? (finde(z.daten.Abstimmungen, id) || {}).zielgruppen : '')
       } }, knopf).then(function (a) {
         if (a.ok) { z.offen = null; z.springeZu = 'p-' + (id || a.id); }
         render();
       });
+    } else if (art === 'profil') {
+      setzeProfil(fuerAuswahl(f));
+      z.offen = null;
+      render();
+      zeigeMeldung(z.profil.length ? 'Jahresplan für: ' + z.profil.join(', ') : 'Du siehst jetzt alle Termine und Aufgaben.');
     } else if (art === 'name') {
       z.name = w.name;
       merke('localStorage', 'helferliste.name', w.name);
@@ -1937,6 +2197,8 @@
       zeigeMeldung(kalenderKnopf(auswahl.length).replace('herunterladen', 'als Kalenderdatei gespeichert.'));
     } else if (art === 'termin') {
       w.id = id;
+      w.zielgruppen = zielgruppenAus(f, id ? (finde(z.daten.Termine, id) || {}).zielgruppen : '');
+      delete w.fuer; delete w.fuer_ab;
       // Häkchen „Direkt beim Termin eintragen“: Plätze (0 = beliebig) – ohne Häkchen leer
       w.plaetze = f.elements.direkt && f.elements.direkt.checked ? String(zahl(w.plaetze)) : '';
       delete w.direkt;
@@ -1982,10 +2244,14 @@
     } else if (art === 'aufgabe') {
       w.id = id;
       var bisher = id ? finde(z.daten.Aufgaben, id) : null;
+      w.zielgruppen = zielgruppenAus(f, bisher ? bisher.zielgruppen : '');
+      if (!f.elements.termin_id) w.termin_id = bisher ? bisher.termin_id || '' : '';
+      delete w.fuer; delete w.fuer_ab;
+      var vomTermin = f.getAttribute('data-termin'); // „+ Aufgabe dazu“ beim Termin
       verwalten({ aktion: 'aufgabe_speichern', aufgabe: w }, knopf).then(function (a) {
         if (a.ok) {
           z.offen = null;
-          z.springeZu = 'a-' + (bisher && bisher.eltern_id ? bisher.eltern_id : id || a.id);
+          z.springeZu = vomTermin ? 't-' + vomTermin : 'a-' + (bisher && bisher.eltern_id ? bisher.eltern_id : id || a.id);
         }
         render();
       });
@@ -2002,6 +2268,25 @@
       });
     }
   }
+
+  // „Für wen?“ aus dem Formular; ohne Feld (keine Zielgruppen eingestellt) bleibt der bisherige Wert
+  function zielgruppenAus(f, bisher) {
+    if (!f.querySelector('input[name=fuer]')) return bisher || '';
+    return fuerAuswahl(f).join(', ');
+  }
+
+  // Schnellwahl „ab Gruppe …“: diese Gruppe und alle danach (älteren) anhaken, die davor nicht
+  document.addEventListener('change', function (ev) {
+    var sel = ev.target;
+    if (!sel || sel.name !== 'fuer_ab' || sel.value === '') return;
+    var ab = +sel.value;
+    Array.prototype.forEach.call(sel.form.querySelectorAll('input[name=fuer]'), function (box) {
+      var i = -1;
+      ZG.gruppen.forEach(function (n, j) { if (istGleich(n, box.value)) i = j; });
+      if (i >= 0) box.checked = i >= ab;
+    });
+    sel.value = '';
+  });
 
   document.addEventListener('click', klick);
   document.addEventListener('submit', absenden);
@@ -2070,6 +2355,7 @@
     var naechsterSonntag = tag((7 - h.getDay()) % 7 || 7);
     var freitag = tag(30 + (5 - (h.getDay() + 30) % 7 + 7) % 7); // ein Freitag in gut vier Wochen
     var jetzt = new Date().toISOString();
+    var grp = ZG.gruppen.length ? ZG.gruppen : ['Gruppe 1', 'Gruppe 2'];
 
     function s(id, termin, station, von, bis, anzahl, datum, info) {
       return { id: id, termin_id: termin, station: station, datum: datum || '', von: von, bis: bis, anzahl: String(anzahl), info: info || '' };
@@ -2089,8 +2375,12 @@
         // Jugend extern: eingeklappt, ohne Farbe, ausblendbar
         { id: 't6', titel: 'Dekanatsjugendgottesdienst', datum: tag(13), ort: 'St. Paul', info: 'Treffpunkt 18:15 Uhr vor dem Gemeindehaus, wir fahren gemeinsam.', von: '19:00', bis: '', plaetze: '0', kategorie: 'Jugend extern' },
         { id: 't7', titel: 'Kreisjugendring-Vollversammlung', datum: tag(19), ort: 'Jugendzentrum', info: '', von: '18:00', bis: '20:00', plaetze: '', kategorie: 'Jugend extern' },
-        // mehrtägig mit Bis-Datum und Platzgrenze
-        { id: 't5', titel: 'Jugendwochenende', datum: freitag, bis_datum: plusTage(freitag, 2), ort: 'Jugendhaus am See', info: 'Anreise Freitag 17 Uhr, Rückkehr Sonntag nach dem Mittagessen.', von: '17:00', bis: '', plaetze: '12' },
+        // mehrtägig mit Bis-Datum und Platzgrenze, nur für die älteren Gruppen
+        { id: 't5', titel: 'Jugendwochenende', datum: freitag, bis_datum: plusTage(freitag, 2), ort: 'Jugendhaus am See', info: 'Anreise Freitag 17 Uhr, Rückkehr Sonntag nach dem Mittagessen.', von: '17:00', bis: '', plaetze: '12', zielgruppen: grp.slice(-2).join(', ') },
+        // „Für wen?“: nur für bestimmte Gruppen, Teams oder Eltern
+        { id: 't8', titel: 'MAK-Sitzung', datum: tag(8), ort: 'Jugendraum', info: 'Planung der nächsten Wochen.', von: '19:30', bis: '21:00', plaetze: '', zielgruppen: grp.slice(-1).concat(['MAK']).join(', ') },
+        { id: 't9', titel: 'SoLa-Vorbereitungstreffen', datum: tag(16), ort: 'Gemeindehaus', info: 'Ort, Programm und Material fürs Sommerlager.', von: '19:00', bis: '', plaetze: '0', zielgruppen: 'Team SoLa' },
+        { id: 't10', titel: 'Elternabend zum Jugendwochenende', datum: tag(21), ort: 'Gemeindehaus', info: 'Infos zu Ablauf, Packliste und Kosten.', von: '19:30', bis: '', plaetze: '', zielgruppen: 'Eltern' },
         {
           id: 't4', titel: 'Adventsmarkt', datum: markt, ort: 'Kirchplatz',
           info: 'Samstag 14–20 Uhr, Sonntag nach dem Gottesdienst bis 18 Uhr.\nBitte warm anziehen!', plaetze: ''
@@ -2112,8 +2402,10 @@
         s('s15', 't4', 'Abbau', '18:00', '20:00', 6, sonntag)
       ],
       Aufgaben: [
-        { id: 'a1', titel: 'Plakate für den Adventsmarkt aufhängen', info: 'Plakate liegen im Gemeindebüro.', frist: plusTage(markt, -14), anzahl: '3' },
-        { id: 'a2', titel: 'Kuchen für den Adventsmarkt backen', info: 'Bitte Freitagabend oder Samstag bis 13 Uhr im Gemeindehaus abgeben. Gern mit Zettel, was drin ist.', frist: plusTage(markt, -1), anzahl: '10' },
+        { id: 'a1', titel: 'Plakate für den Adventsmarkt aufhängen', info: 'Plakate liegen im Gemeindebüro.', frist: plusTage(markt, -14), anzahl: '3', termin_id: 't4', zielgruppen: grp.slice(-2).concat(['MAK']).join(', ') },
+        { id: 'a2', titel: 'Kuchen für den Adventsmarkt backen', info: 'Bitte Freitagabend oder Samstag bis 13 Uhr im Gemeindehaus abgeben. Gern mit Zettel, was drin ist.', frist: plusTage(markt, -1), anzahl: '10', termin_id: 't4' },
+        { id: 'a8', titel: 'Zeltplan fürs Sommerlager erstellen', info: 'Wer schläft wo, welche Zelte brauchen wir?', frist: '', anzahl: '2', termin_id: 't9' },
+        { id: 'a9', titel: 'Snacks für die MAK-Sitzung', info: '', frist: '', anzahl: '1', termin_id: 't8' },
         { id: 'a3', titel: 'Weihnachtsbaum für die Kirche besorgen', info: '', frist: plusTage(sonntag, 14), anzahl: '0' },
         { id: 'a5', titel: 'Baum in der Gärtnerei aussuchen', info: '', frist: '', anzahl: '2', eltern_id: 'a3' },
         { id: 'a6', titel: 'Anhänger organisieren', info: '', frist: '', anzahl: '1', eltern_id: 'a3', erledigt: heute(), erledigt_von: 'Peter' },

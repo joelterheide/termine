@@ -667,3 +667,70 @@ form.zeile-form input { width: auto; flex: 0 1 14rem; }
 }
 
 .kasten .lueckenfueller { flex: 1 1 10rem; }
+
+/* ---------- „Für wen?“ ---------- */
+
+.profil-zeile {
+  margin: 1.1rem 0 0;
+  font-size: .9375rem;
+  color: var(--leise);
+}
+.profil-zeile strong { color: var(--text); font-weight: 600; }
+.kasten.profil { margin-top: 1.25rem; border-color: var(--rand); }
+.kasten.profil h3 { font-size: 1.1rem; }
+
+.fuer-teil { margin: 0 0 .5rem; }
+.fuer-titel {
+  display: block;
+  font-size: .8125rem;
+  font-weight: 600;
+  color: var(--leise);
+  margin-bottom: .2rem;
+}
+.kasten label.wahl-box {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  margin: 0 1.1rem .35rem 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.kasten label.wahl-box input { margin: 0; }
+
+fieldset.fuer {
+  border: 1px solid var(--linie);
+  border-radius: 3px;
+  margin: 0 0 .9rem;
+  padding: .5rem .75rem .35rem;
+  background: var(--hinter);
+}
+fieldset.fuer legend { font-size: .9375rem; padding: 0 .3rem; }
+fieldset.fuer > .tipp { margin: 0 0 .5rem; }
+.fuer-schnell { font-size: .875rem; color: var(--leise); margin: .2rem 0 .3rem; }
+.fuer-schnell select { width: auto; padding: .1rem .3rem; font-size: .875rem; }
+
+select {
+  font: inherit;
+  font-size: 1rem;
+  color: var(--text);
+  background: var(--hinter);
+  border: 1px solid var(--rand);
+  border-radius: 3px;
+  padding: .35rem .5rem;
+  width: 100%;
+}
+select:focus { outline: 2px solid var(--akzent); outline-offset: 1px; }
+.kasten label select { margin-top: .2rem; }
+
+.etikett.fuer { border-style: dashed; white-space: normal; }
+
+/* Aufgaben beim Termin */
+.t-aufgaben { margin-top: .9rem; }
+.t-aufgaben-titel { font-weight: 600; font-size: .9375rem; }
+.t-aufgaben ul { margin: .25rem 0 0; padding-left: 1.1rem; }
+.t-aufgaben li { margin: .15rem 0; }
+.t-aufgaben li.fertig a { text-decoration: line-through; color: var(--leise); }
+.t-aufgaben .dabei { font-size: .8125rem; font-weight: 600; }
+
+/* Putzdienst der eigenen Gruppe in der Tabelle */
+.monat-zeile .putz.meins { color: var(--text); font-weight: 600; }

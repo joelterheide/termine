@@ -13,6 +13,16 @@ window.HELFERLISTE = {
   // Leer lassen ('') = keine Ferien anzeigen.
   ferien: 'BY',
 
+  // „Für wen?“: Beim ersten Öffnen wählt jeder aus, für wen der Jahresplan sein soll,
+  // und sieht dann nur, was ihn betrifft. Termine, Aufgaben und Abstimmungen bekommen
+  // dazu im Formular das Feld „Für wen?“ (nichts angehakt = für alle).
+  // Gruppen bitte von jung nach alt sortieren – dann geht im Formular „ab Gruppe …“.
+  zielgruppen: {
+    gruppen: ['Stachos', 'Barrakudas', 'Erdmännchen', 'Belugas', 'Wanderfalken', 'Pinguine'],
+    teams: ['MAK', 'Team SoLa'],      // Arbeitsgruppen mit eigenen Terminen
+    weitere: ['Eltern']               // Zielgruppen außerhalb der Jugend
+  },
+
   // Putzdienst in der Tabellenansicht: Die Gruppen sind reihum je einen Monat dran,
   // die erste Gruppe im Monat „ab“ (JJJJ-MM). Leere Liste = kein Putzdienst anzeigen.
   // Unter „monate“ lassen sich einzelne Monate abweichend festlegen.

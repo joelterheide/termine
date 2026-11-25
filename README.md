@@ -7,6 +7,9 @@ Eine schlichte Website mit allen Terminen, Diensten und Aufgaben übers Jahr. Ma
 ## Was sie kann
 
 - **Termine** mit Datum, optional Bis-Datum für mehrere Tage, Uhrzeit (z. B. „14:00–16:00“ oder „19:00“), Ort und Info. Man trägt sich **direkt beim Termin** ein, optional mit Platzgrenze. Bei Bedarf kommen **Schichten** dazu (z. B. Aufbau, Glühweinstand, Kasse) mit eigenen Zeiten und Plätzen. Ohne das Häkchen „Direkt beim Termin eintragen“ trägt man sich nur bei den Schichten ein, oder der Termin dient nur zur Info.
+- **Für wen?** Beim ersten Öffnen wählt jeder aus, für wen der Jahresplan sein soll: eine oder mehrere Gruppen (z. B. Pinguine), Teams (z. B. Team SoLa) oder „Eltern“. Danach sieht man nur noch die Termine, Aufgaben und Abstimmungen, die einen betreffen, und oben steht „Jahresplan für: …“ mit „ändern“. In der Verwaltung hat jeder Termin, jede Aufgabe und jede Abstimmung das Feld „Für wen?“. Nichts angehakt heißt für alle, auch für Eltern. Dazu gibt es Schnellwahlen wie „alle Gruppen“ (ohne Eltern) oder „ab Pinguine“ (diese und alle älteren Gruppen). Als Verwaltung sieht man immer alles.
+- **Link für Eltern:** Unter „ändern“ die gewünschte Auswahl anhaken und auf „Link kopieren“ klicken. Der Link (z. B. `…/termine/?fuer=Eltern`) öffnet den Jahresplan gleich mit dieser Auswahl, ideal für die Eltern-WhatsApp-Gruppe.
+- **Aufgaben zu Terminen:** Beim Termin über „+ Aufgabe dazu“ (oder im Aufgabenformular unter „Gehört zu Termin“) wird eine Aufgabe einem Termin zugeordnet. Sie steht dann beim Termin unter „Aufgaben dazu“, mit Stand und Link. Bei der Aufgabe steht „zu Adventsmarkt am Sa 28.11.“. Ohne eigenes „Für wen?“ gilt für die Aufgabe das des Termins.
 - **Aufgaben ohne festen Termin**, z. B. Kuchen backen oder Plakate aufhängen, optional mit „erledigen bis“.
 - **Unteraufgaben:** Eine Aufgabe kann in Teile aufgeteilt werden, z. B. „Weihnachtsbaum besorgen“ in „Baum aussuchen“, „Anhänger organisieren“ und „Aufstellen“. Für jeden Teil trägt man sich einzeln ein und hakt ihn ab, wenn er erledigt ist. Bei der Aufgabe steht dann „2 von 3 Unteraufgaben erledigt“. Die ganze Aufgabe hakt man zum Schluss selbst ab („Ganze Aufgabe erledigt“). Erst dann wandert sie nach unten unter „Erledigte Aufgaben“. Aufgaben ohne Unteraufgaben hakt man direkt ab. In der Verwaltung legt man über „+ Unteraufgaben“ mehrere auf einmal an, eine pro Zeile.
 - **Eintragen** mit Namen und optionaler Notiz („bringe Waffeleisen mit“), **absagen** über das × neben dem Namen.
@@ -62,6 +65,7 @@ api: 'https://script.google.com/macros/s/……/exec',
 Mit **Commit changes** speichern. Nach etwa einer Minute ist die Seite verbunden und der Demo-Hinweis verschwindet. In `config.js` lassen sich außerdem einstellen:
 
 - `titel`, `untertitel`: Überschrift und Unterzeile
+- `zielgruppen`: die Gruppen (von jung nach alt, für „ab Gruppe …“), Teams und sonstigen Zielgruppen wie „Eltern“, die bei „Für wen?“ zur Auswahl stehen
 - `ferien`: Bundesland für die Schulferien in der Tabelle, z. B. `'BY'` oder `'NI'`. Leer bedeutet: keine Ferien anzeigen. Die Daten kommen von [openholidaysapi.org](https://www.openholidaysapi.org).
 - `putzdienst`: Gruppen, die reihum je einen Monat dran sind, z. B.
   ```js
