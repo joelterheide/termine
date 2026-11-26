@@ -34,6 +34,30 @@
 
   // 'Pinguine, MAK' → ['Pinguine', 'MAK']. „ab Pinguine“ steht für Pinguine und alle Gruppen,
   // die in config.js danach (älter) kommen – stimmt die Reihenfolge dort, stimmt es überall.
+  // Teams: die aus config.js und alle, die bei Terminen, Aufgaben oder Abstimmungen eingetragen sind
+  // (so lassen sich in der Verwaltung weitere Teams anlegen, ohne config.js oder Code.gs zu ändern)
+  var teamsCache = { daten: null, liste: [] };
+  function teamsListe() {
+    var d = typeof z !== 'undefined' ? z.daten : null;
+    if (teamsCache.daten === d && d) return teamsCache.liste;
+    var aus = ZG.teams.slice();
+    var bekannt = ZG.gruppen.concat(ZG.weitere);
+    if (d) {
+      ['Termine', 'Aufgaben', 'Abstimmungen'].forEach(function (tab) {
+        (d[tab] || []).forEach(function (x) {
+          String(x.zielgruppen || '').split(',').forEach(function (n) {
+            n = n.trim();
+            if (!n || /^ab\s/i.test(n) || bekannt.some(function (b) { return istGleich(b, n); })) return;
+            if (!aus.some(function (b) { return istGleich(b, n); })) aus.push(n);
+          });
+        });
+      });
+    }
+    teamsCache = { daten: d, liste: aus };
+    return aus;
+  }
+  function alleZielgruppen() { return ZG.gruppen.concat(teamsListe(), ZG.weitere); }
+
   function zgListe(w) {
     var aus = [];
     String(w == null ? '' : w).split(',').map(function (x) { return x.trim(); }).filter(Boolean).forEach(function (x) {
@@ -66,6 +90,14 @@
   }
   function istGleich(a, b) { return String(a).toLowerCase() === String(b).toLowerCase(); }
 
+  // Schon gesehene Termine (für den Hinweis „neu“) – nur in diesem Browser
+  function leseGesehen() {
+    try {
+      var g = JSON.parse(lies('localStorage', 'helferliste.gesehen') || 'null');
+      return Array.isArray(g) ? g.map(String) : null;
+    } catch (e) { return null; }
+  }
+
   // Profil: null = noch nicht gewählt, [] = alles anzeigen, sonst die gewählten Zielgruppen
   function leseProfil() {
     try {
@@ -95,13 +127,15 @@
     vorlage: null,        // geladene Vorlage zum Übernehmen von Terminen (Verwaltung)
     teamAufgaben: {},     // Verwaltung: beim Termin aufgeklappte Team-Aufgaben (id → true)
     vorlageJahr: new Date().getMonth() >= 9 ? new Date().getFullYear() + 1 : new Date().getFullYear(),
-    jahresFerien: {}      // Schulferien je Jahr für Vorlagen mit Regeln
+    jahresFerien: {},     // Schulferien je Jahr für Vorlagen mit Regeln
+    gesehen: leseGesehen(), // IDs der Termine, die dieser Browser schon kennt (null = erster Besuch)
+    neuAlle: false        // Hinweis „neue Termine“ ganz aufgeklappt
   };
 
   function setzeProfil(liste) {
     // Namen wie in config.js schreiben (Groß-/Kleinschreibung), unbekannte beibehalten
     z.profil = liste.map(function (n) {
-      return ZG.alle.filter(function (b) { return istGleich(b, n); })[0] || n;
+      return alleZielgruppen().filter(function (b) { return istGleich(b, n); })[0] || n;
     });
     z.trotzdem = '';
     merke('localStorage', 'helferliste.profil', JSON.stringify(z.profil));
@@ -398,8 +432,9 @@
   // Aufgaben nur für Teams (z. B. „Team SoLa“, „MAK“) sieht nur, wer das Team bei „Für wen?“ angehakt
   // hat oder schon eingetragen ist – auch bei „Alles anzeigen“. Die Verwaltung sieht sie unter „Aufgaben“.
   function nurTeams(liste) {
-    return !!liste && liste.length > 0 && ZG.teams.length > 0 &&
-      liste.every(function (x) { return ZG.teams.some(function (n) { return istGleich(n, x); }); });
+    var teams = teamsListe();
+    return !!liste && liste.length > 0 && teams.length > 0 &&
+      liste.every(function (x) { return teams.some(function (n) { return istGleich(n, x); }); });
   }
   function imTeam(liste) {
     return !!z.profil && liste.some(function (x) { return z.profil.some(function (p) { return istGleich(p, x); }); });
@@ -521,6 +556,7 @@
 
     document.getElementById('hinweis').innerHTML = hinweisHtml();
     setzeInhalt(profilElement(), profilHtml());
+    neuElement().innerHTML = z.sicht && !istOffen('profil') && z.profil !== null ? neuHtml() : '';
     document.getElementById('reiter').innerHTML = reiterHtml();
     setzeInhalt(document.getElementById('fuss'), fussHtml());
 
@@ -549,6 +585,17 @@
     }
   }
 
+  function neuElement() {
+    var el = document.getElementById('neu');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'neu';
+      var p = profilElement();
+      p.parentNode.insertBefore(el, p.nextSibling);
+    }
+    return el;
+  }
+
   function profilElement() {
     var el = document.getElementById('profil');
     if (!el) { // ältere index.html im Browser-Speicher
@@ -562,7 +609,7 @@
 
   // Auswahl „Für wen soll der Jahresplan sein?“ – beim ersten Öffnen und über „ändern“
   function profilHtml() {
-    if (!ZG.alle.length || !z.sicht) return '';
+    if (!alleZielgruppen().length || !z.sicht) return '';
     var erstes = z.profil === null;
     if (!erstes && !istOffen('profil')) {
       var text = z.profil.length ? z.profil.join(', ') : 'alle';
@@ -583,7 +630,7 @@
       '<p class="tipp">Du siehst dann nur die Termine und Aufgaben, die dich betreffen. Mehrere Häkchen sind möglich. ' +
       (ZG.teams.length ? 'Aufgaben eines Teams (z. B. ' + esc(ZG.teams[ZG.teams.length > 1 ? 1 : 0]) + ') siehst du nur, wenn du das Team anhakst. ' : '') +
       'Die Auswahl gilt nur in diesem Browser und lässt sich oben jederzeit ändern.</p>' +
-      boxen('Gruppe', ZG.gruppen) + boxen('Team', ZG.teams) + boxen('Sonstige', ZG.weitere) +
+      boxen('Gruppe', ZG.gruppen) + boxen('Team', teamsListe()) + boxen('Sonstige', ZG.weitere) +
       '<div class="knoepfe"><button type="submit" class="haupt">Übernehmen</button>' +
       '<button type="button" data-aktion="profil-alles">Alles anzeigen</button>' +
       (erstes ? '' : '<button type="button" data-aktion="schliessen">Abbrechen</button>') + '</div>' +
@@ -604,7 +651,8 @@
   function fuerFeld(liste, hinweis) {
     if (!ZG.alle.length) return '';
     liste = liste || [];
-    var extra = liste.filter(function (x) { return !ZG.alle.some(function (b) { return istGleich(b, x); }); });
+    var alle = alleZielgruppen();
+    var extra = liste.filter(function (x) { return !alle.some(function (b) { return istGleich(b, x); }); });
     function box(n) {
       var an = liste.some(function (x) { return istGleich(x, n); });
       return '<label class="wahl-box"><input type="checkbox" name="fuer" value="' + esc(n) + '"' + (an ? ' checked' : '') + '> ' + esc(n) + '</label>';
@@ -614,7 +662,10 @@
     }
     return '<fieldset class="fuer"><legend>Für wen?</legend>' +
       '<span class="tipp">' + (hinweis || 'Nichts angehakt = für alle (auch Eltern).') + '</span>' +
-      teil('Gruppen', ZG.gruppen) + teil('Teams', ZG.teams) + teil('Sonstige', ZG.weitere.concat(extra)) +
+      teil('Gruppen', ZG.gruppen) +
+      '<div class="fuer-teil"><span class="fuer-titel">Teams</span>' + teamsListe().map(box).join('') +
+      '<label class="neues-team"><input name="fuer_neu" maxlength="40" placeholder="+ weiteres Team" aria-label="weiteres Team, z. B. Team Adventsmarkt"></label></div>' +
+      teil('Sonstige', ZG.weitere.concat(extra)) +
       (ZG.gruppen.length > 1 ? '<div class="fuer-schnell">Schnell: <button type="button" class="link" data-aktion="fuer-jugend">alle Gruppen</button>' +
         '<span class="trenn"> · </span><span class="ab-wahl">ab <select name="fuer_ab" aria-label="ab Gruppe"><option value="">Gruppe …</option>' +
         ZG.gruppen.map(function (n, i) { return '<option value="' + i + '">' + esc(n) + '</option>'; }).join('') + '</select></span>' +
@@ -913,7 +964,7 @@
           h += '<tr class="ferien"><td class="u-datum">' + esc(spanne(e.f.von, e.f.bis)) + '</td><td></td><td>' + esc(e.f.name) + '</td></tr>';
         } else {
           h += '<tr' + (e.t.extern ? ' class="extern"' : '') + '><td class="u-datum">' + esc(spanne(e.t.von, e.t.bis)) + '</td><td class="u-zeit">' + esc(terminZeit(e.t)) + '</td>' +
-            '<td><a href="#t-' + esc(e.t.id) + '">' + esc(e.t.titel) + '</a>' +
+            '<td>' + neuEtikett(e.t) + '<a href="#t-' + esc(e.t.id) + '">' + esc(e.t.titel) + '</a>' +
             (e.t.extern ? ' <span class="etikett">' + EXTERN + '</span>' : '') + zgEtikett(e.t.zg) + '</td></tr>';
         }
       });
@@ -1055,7 +1106,7 @@
       return '<section class="termin extern zu' + (vorbei ? ' vorbei' : '') + '" id="t-' + esc(t.id) + '">' +
         '<button class="extern-zeile" data-aktion="extern-auf" data-id="' + esc(t.id) + '" aria-expanded="false">' +
         '<span class="e-datum">' + esc(spanne(t.von, t.bis) + (uhrKurz ? ' · ' + uhrKurz : '')) + '</span>' +
-        '<span class="e-titel">' + esc(t.titel) + '</span>' +
+        '<span class="e-titel">' + neuEtikett(t) + esc(t.titel) + '</span>' +
         '<span class="etikett">' + EXTERN + '</span></button></section>';
     }
 
@@ -1067,7 +1118,7 @@
       var rel = vorbei ? '' : relativ(t.von);
       var uhr = uhrText(t);
       h += '<div class="t-kopf">';
-      h += '<div class="t-datum">' + esc(zeitraum(t.von, t.bis)) + (uhr ? ' · ' + esc(uhr) : '') + (rel ? ' · ' + rel : '') +
+      h += '<div class="t-datum">' + neuEtikett(t) + esc(zeitraum(t.von, t.bis)) + (uhr ? ' · ' + esc(uhr) : '') + (rel ? ' · ' + rel : '') +
         (t.extern ? ' · <span class="etikett">' + EXTERN + '</span>' : '') + zgEtikett(t.zg) + '</div>';
       h += '<h2>' + esc(t.titel) + '</h2>';
       if (t.ort) h += '<div class="t-ort">' + esc(t.ort) + '</div>';
@@ -1636,7 +1687,35 @@
   function setzeDaten(daten, merken) {
     basis = vollstaendig(daten);
     if (merken && !backend.demo) merke('localStorage', STAND, JSON.stringify({ api: KONF.api, daten: basis }));
+    if (z.gesehen === null) merkeGesehen([]); // erster Besuch: nichts ist „neu“
     zeigeStand();
+  }
+
+  // ---------- neue Termine ----------
+  function terminIds() { return (basis ? basis.Termine : []).map(function (t) { return t.id; }).filter(function (id) { return id && !istTmp(id); }); }
+  // dazu: diese IDs, dazu alle bekannten; Gelöschte fallen weg
+  function merkeGesehen(dazu) {
+    var jetzt = terminIds();
+    var alt = z.gesehen === null ? jetzt : z.gesehen;
+    z.gesehen = einzigartig(alt.concat(dazu)).filter(function (id) { return jetzt.indexOf(id) >= 0; });
+    merke('localStorage', 'helferliste.gesehen', JSON.stringify(z.gesehen));
+  }
+  function istNeu(t) { return !!z.gesehen && !istTmp(t.id) && z.gesehen.indexOf(t.id) < 0; }
+  // neue, kommende Termine, die zur Auswahl „Für wen?“ passen
+  function neueTermine() { return z.gesehen ? kommendeTermine().filter(function (t) { return istNeu(t) && sichtbar(t); }) : []; }
+  function neuEtikett(t) { return istNeu(t) ? '<span class="neu-etikett">neu</span> ' : ''; }
+
+  function neuHtml() {
+    var neu = neueTermine();
+    if (!neu.length) return '';
+    var zeigen = z.neuAlle ? neu : neu.slice(0, 3);
+    return '<div class="neu-banner"><strong>' + (neu.length === 1 ? 'Neuer Termin' : neu.length + ' neue Termine') +
+      (profilAktiv() ? ' für dich' : '') + ':</strong> ' +
+      zeigen.map(function (t) {
+        return '<span class="neu-eintrag"><a href="#t-' + esc(t.id) + '">' + esc(t.titel) + '</a> <span class="leise">' + esc(datumKurz(t.von)) + '</span></span>';
+      }).join('<span class="trenn"> · </span>') +
+      (neu.length > zeigen.length ? '<span class="trenn"> · </span><button class="link" data-aktion="neu-alle">und ' + (neu.length - zeigen.length) + ' weitere</button>' : '') +
+      ' <button class="link neu-ok" data-aktion="neu-gesehen">Gesehen</button></div>';
   }
 
   function zeigeStand() {
@@ -1738,7 +1817,10 @@
 
   function verwalten(anfrage, knopf) {
     anfrage.passwort = z.passwort;
-    return senden(anfrage, knopf);
+    return senden(anfrage, knopf).then(function (a) {
+      if (a.ok) merkeGesehen(terminIds()); // eigene Änderungen sind für die Verwaltung nicht „neu“
+      return a;
+    });
   }
 
   function abmelden() {
@@ -1997,14 +2079,14 @@
         if (n && !namen.some(function (y) { return istGleich(y, n); })) namen.push(n);
       });
     });
-    var ab = [], fehlt = [];
+    var ab = [], fehlt = [], neuTeams = [];
     namen.forEach(function (n) {
       if (/^ab\s+/i.test(n)) {
         var i = abGruppe(n);
         if (i < 0) fehlt.push(n.replace(/^ab\s+/i, ''));
         else ab.push('<strong>' + esc(n) + '</strong> = ' + esc(ZG.gruppen.slice(i).join(', ')));
-      } else if (!ZG.alle.some(function (b) { return istGleich(b, n); })) {
-        fehlt.push(n);
+      } else if (!alleZielgruppen().some(function (b) { return istGleich(b, n); })) {
+        neuTeams.push(n);
       }
     });
     var h = '';
@@ -2013,8 +2095,11 @@
         'Daraus ergibt sich: ' + (ab.length ? ab.join(' · ') : '–') +
         '. Stimmt die Reihenfolge nicht, einfach in config.js ändern – die Termine passen sich dann von selbst an.</p>';
     }
+    if (neuTeams.length) {
+      h += '<p class="tipp">Neu als Team dazu: ' + esc(neuTeams.join(', ')) + ' – steht danach bei „Für wen?“ zur Auswahl.</p>';
+    }
     if (fehlt.length) {
-      h += '<p class="warnung">Nicht in config.js eingetragen: ' + esc(fehlt.join(', ')) +
+      h += '<p class="warnung">Diese Gruppe steht nicht in config.js: ' + esc(fehlt.join(', ')) +
         '. Solche Termine sieht nur, wer „Alles anzeigen“ gewählt hat. Bitte in config.js ergänzen.</p>';
     }
     return h;
@@ -2642,7 +2727,7 @@
         if (!ff) break;
         Array.prototype.forEach.call(ff.querySelectorAll('input[name=fuer]'), function (box) {
           var istGruppe = ZG.gruppen.some(function (n) { return istGleich(n, box.value); });
-          if (aktion === 'fuer-keine') box.checked = false;
+          if (aktion === 'fuer-keine') { box.checked = false; if (ff.elements.fuer_neu) ff.elements.fuer_neu.value = ''; }
           else if (istGruppe) box.checked = true;
           else if (ZG.weitere.some(function (n) { return istGleich(n, box.value); })) box.checked = false;
         });
@@ -2693,6 +2778,17 @@
           history.replaceState(null, '', '#aufgaben');
         }
         oeffne({ art: 'erinnerungen', welche: aktion === 'erinnerungen-meine' ? 'meine' : '' }, 'form[data-form=erinnerungen] select[name=vorher]');
+        break;
+
+      case 'neu-gesehen':
+        merkeGesehen(neueTermine().map(function (t) { return t.id; }));
+        z.neuAlle = false;
+        render();
+        break;
+
+      case 'neu-alle':
+        z.neuAlle = true;
+        render();
         break;
 
       case 'team-aufgaben':
@@ -2802,7 +2898,7 @@
     } else if (art === 'termin') {
       w.id = id;
       w.zielgruppen = zielgruppenAus(f, id ? (finde(z.daten.Termine, id) || {}).zielgruppen : '');
-      delete w.fuer; delete w.fuer_ab;
+      delete w.fuer; delete w.fuer_ab; delete w.fuer_neu;
       // Häkchen „Direkt beim Termin eintragen“: Plätze (0 = beliebig) – ohne Häkchen leer
       w.plaetze = f.elements.direkt && f.elements.direkt.checked ? String(zahl(w.plaetze)) : '';
       delete w.direkt;
@@ -2850,7 +2946,7 @@
       var bisher = id ? finde(z.daten.Aufgaben, id) : null;
       w.zielgruppen = zielgruppenAus(f, bisher ? bisher.zielgruppen : '');
       if (!f.elements.termin_id) w.termin_id = bisher ? bisher.termin_id || '' : '';
-      delete w.fuer; delete w.fuer_ab;
+      delete w.fuer; delete w.fuer_ab; delete w.fuer_neu;
       var vomTermin = f.getAttribute('data-termin'); // „+ Aufgabe dazu“ beim Termin
       verwalten({ aktion: 'aufgabe_speichern', aufgabe: w }, knopf).then(function (a) {
         if (a.ok) {
@@ -2878,7 +2974,16 @@
     if (!f.querySelector('input[name=fuer]')) return bisher || '';
     // die ältesten Gruppen ab einer bestimmten als „ab …“ speichern – so passt es auch nach
     // einer Änderung der Reihenfolge in config.js oder mit einer neuen Gruppe
-    return zgKurz(fuerAuswahl(f), true).join(', ');
+    var liste = zgKurz(fuerAuswahl(f), true);
+    // „+ weiteres Team“: neue Namen dazu (mehrere mit Komma)
+    var neu = f.elements.fuer_neu ? f.elements.fuer_neu.value : '';
+    String(neu).split(',').forEach(function (n) {
+      n = n.replace(/\s+/g, ' ').trim().slice(0, 40);
+      if (!n) return;
+      n = alleZielgruppen().filter(function (b) { return istGleich(b, n); })[0] || n; // Schreibweise wie vorhanden
+      if (!liste.some(function (x) { return istGleich(x, n); })) liste.push(n);
+    });
+    return liste.join(', ');
   }
 
   // Schnellwahl „ab Gruppe …“: diese Gruppe und alle danach (älteren) anhaken, die davor nicht

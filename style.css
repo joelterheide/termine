@@ -805,3 +805,28 @@ select:focus { outline: 2px solid var(--akzent); outline-offset: 1px; }
 .zuordnen-liste .fuer-titel { margin: .5rem 0 .25rem; }
 .kasten .zuordnen-liste label.haken-zeile { align-items: flex-start; margin-bottom: .4rem; }
 .kasten .zuordnen-liste label.haken-zeile input { margin-top: .2rem; flex: none; }
+
+/* neue Termine seit dem letzten Besuch */
+.neu-banner {
+  margin: 0 0 .9rem;
+  padding: .5rem .75rem;
+  border-left: 3px solid var(--akzent);
+  background: var(--flaeche);
+  font-size: .9375rem;
+  line-height: 1.5;
+}
+.neu-banner .neu-eintrag { white-space: nowrap; }
+.neu-banner .neu-ok { margin-left: .5rem; }
+.neu-etikett {
+  display: inline-block;
+  padding: 0 .35rem;
+  border-radius: 3px;
+  background: var(--akzent);
+  color: var(--hinter);
+  font-size: .7rem;
+  font-weight: 600;
+  line-height: 1.45;
+  vertical-align: .1em;
+}
+.kasten label.neues-team { display: inline-block; margin: 0 0 .3rem; }
+.kasten fieldset.fuer label.neues-team input { width: 11rem; max-width: 100%; padding: .15rem .4rem; font-size: .875rem; }
